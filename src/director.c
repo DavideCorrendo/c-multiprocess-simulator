@@ -17,6 +17,8 @@ void main(){
 worker_seat **Create_seatwork(int num){
     worker_seat **workerseats = malloc(num * sizeof(worker_seat*));
 
+    if(workerseats == NULL) return NULL;
+
     for(int i = 0; i < num; i++){
         workerseats[i] = malloc(sizeof(worker_seat));
         workerseats[i]->id = i;
