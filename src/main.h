@@ -12,6 +12,8 @@
 
 #define SEM_KEY       567891234
 
+#define MAX_MSG_SIZE 500
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -65,6 +67,17 @@ typedef struct stats{
     int     num_pause_tot;
     float   *num_ratio_worker_user;
 }stats;
+
+struct message {
+    long mtype;
+    char mtext[MAX_MSG_SIZE];
+};
+
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+};
 
 worker_seat **Create_seatwork(int );
 
