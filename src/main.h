@@ -2,6 +2,16 @@
 #ifndef DIRECTOR
 #define DIRECTOR
 
+#define MAX_LINE_LENGTH 100
+
+#define SHM_KEY_STATS 123456789
+#define SHM_KEY_SEATS 456789123
+#define SHM_KEY_TIMER 789123456
+
+#define MSG_KEY       345678912
+
+#define SEM_KEY       567891234
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -36,6 +46,25 @@ typedef struct worker_seat{
     enum tasks task;
     bool busy;
 }worker_seat;
+
+typedef struct stats{
+    int     tot_num_users;
+    int     avg_num_users;
+    int     tot_num_tasks_done;
+    int     tot_num_tasks_not_done;
+    int     avg_num_tasks_done;
+    int     avg_num_tasks_not_done;
+    clock_t avg_time_users_wait_tot;
+    clock_t avg_time_users_wait_daily;
+    clock_t avg_tasks_done_tot;
+    clock_t avg_tasks_done_daily;
+    stats   **prec_stats;
+    int     num_workers_active_daily;
+    int     num_workers_active_tot;
+    int     avg_num_pause_daily;
+    int     num_pause_tot;
+    float   *num_ratio_worker_user;
+}stats;
 
 worker_seat **Create_seatwork(int );
 
