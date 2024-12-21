@@ -1,12 +1,12 @@
 #include "main.h"
 
-#define NOF_WORKERSEATS 20
-#define NOF_WORKERS 25
-#define NOF_USERS 50
+void main(int argc, char **argv){
 
-void main(){
+    int NOF_WORKERSEATS, NOF_WORKERS, NOF_USERS;
 
-
+    for(int i = 0; i < 3; i++) {
+        atoi(argv[i + 1]);
+    }
 
     worker_seat **seats = Create_seatwork(NOF_WORKERSEATS);
 
