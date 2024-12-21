@@ -4,9 +4,9 @@ void main(int argc, char **argv){
 
     int NOF_WORKERSEATS, NOF_WORKERS, NOF_USERS;
 
-    for(int i = 0; i < 3; i++) {
-        atoi(argv[i + 1]);
-    }
+    NOF_WORKERSEATS = atoi(argv[1]);
+    NOF_WORKERS = atoi(argv[2]);
+    NOF_USERS = atoi(argv[3]);
 
     worker_seat **seats = Create_seatwork(NOF_WORKERSEATS);
 
