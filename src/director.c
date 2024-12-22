@@ -1,109 +1,112 @@
 #include "main.h"
 
-
-void main(int argc, char **argv){
-
+void main(int argc, char **argv) {
+    // Read configuration parameters
     const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
 
     int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
     int explode_threshold = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
 
-    int NOF_WORKERSEATS, NOF_WORKERS, NOF_USERS, N_NANO_SEC, N_OF_PAUSE;
+    // Get command line arguments
+    int NOF_WORKERSEATS = atoi(argv[1]);
+    int NOF_WORKERS = atoi(argv[2]);
+    int NOF_USERS = atoi(argv[3]);
+    int N_NANO_SEC = atoi(argv[4]);
+    int N_OF_PAUSE = atoi(argv[5]);
 
-    NOF_WORKERSEATS = atoi(argv[1]);
-    NOF_WORKERS = atoi(argv[2]);
-    NOF_USERS = atoi(argv[3]);
-    N_NANO_SEC = atoi(argv[4]);
-    N_OF_PAUSE = atoi(argv[5]);
-
-    stats **statistics = Create_statistics(SIM_DURATION);
-    worker_seat **seats = Create_seatwork(NOF_WORKERSEATS);
-    clock_t timer;
 
     int shmid_stats;
     int shmid_seats;
     int shmid_timer;
 
-    stats **shared_stats;
-    worker_seat **shared_seats;
+    stats *shared_stats;
+    worker_seat *shared_seats;
     clock_t *shared_timer;
 
-    initialization_shm(&shmid_stats, &shmid_seats, &shmid_timer, SIM_DURATION, NOF_WORKERSEATS, shared_stats, shared_seats, shared_timer);
+    // Create and initialize shared memory
+    initialization_shm(&shmid_stats, &shmid_seats, &shmid_timer, SIM_DURATION, NOF_WORKERSEATS,
+                       &shared_stats, &shared_seats, &shared_timer);
 
-    shared_stats = statistics;
-    shared_seats = seats;
-    shared_timer = &timer;
+    // Initialize the shared memory contents
+    for(int i = 0; i < NOF_WORKERSEATS; i++) {
+        shared_seats[i].id = i;
+        shared_seats[i].busy = false;
+        shared_seats[i].task = 0;
+    }
 
+    for(int i = 0; i < SIM_DURATION; i++) {
+        shared_stats[i].tot_num_users = 0;
+        shared_stats[i].avg_num_users = 0;
+        shared_stats[i].tot_num_tasks_done = 0;
+        shared_stats[i].tot_num_tasks_not_done = 0;
+        shared_stats[i].avg_num_tasks_done = 0;
+        shared_stats[i].avg_num_tasks_not_done = 0;
+        shared_stats[i].avg_time_users_wait_tot = 0;
+        shared_stats[i].avg_time_users_wait_daily = 0;
+        shared_stats[i].avg_tasks_done_tot = 0;
+        shared_stats[i].avg_tasks_done_daily = 0;
+        //statistiche precedenti suddivise
+        shared_stats[i].num_workers_active_daily = 0;
+        shared_stats[i].num_workers_active_tot = 0;
+        shared_stats[i].avg_num_pause_daily = 0;
+        shared_stats[i].num_pause_tot = 0;
+        shared_stats[i].num_ratio_worker_user = 0;
+    }
+
+    *shared_timer = 0;
+
+    // Create message queue and semaphores
     int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-
     int semid = semget(SEM_KEY, 3 + NOF_WORKERSEATS, IPC_CREAT | 0666);
 
-//-------------------------------------------------------------------
+    // Create all processes
+    pid_t pid;
 
-    execv("ticket_erogator.c", "./ticket_erogator");
-
-    for(int i = 0; i < NOF_WORKERS; i++){
-        char *array_worker[2];
-        array_worker[0] = "worker";
-        array_worker[1] = NULL;
-        execv("./worker", array_worker);
+    pid = fork();
+    if (pid == 0) {
+        execv("./ticket_erogator", (char*[]){ "ticket_erogator", NULL });
+        perror("execv ticket_erogator failed");
+        exit(1);
     }
 
-    for(size_t i = 0; i < NOF_USERS; i++){
-        char *array_user[2];
-        array_user[0] = "user";
-        array_user[1] = NULL;
-        execv("./user", array_user);
-    }
-
-    return 1;
-}
-
-worker_seat **Create_seatwork(int num){
-    worker_seat **workerseats = malloc(num * sizeof(worker_seat*));
-
-    if(workerseats == NULL) return NULL;
-
-    for(int i = 0; i < num; i++){
-        workerseats[i] = malloc(sizeof(worker_seat));
-        workerseats[i]->id = i;
-        workerseats[i]->busy = false;
-        workerseats[i]->task = 0;
-    }
-
-    return workerseats;
-
-}
-
-stats **Create_statistics(int num){
-    stats **statistics = malloc(num * sizeof(stats*));
-
-    for(int i = 0; i < num; i++){
-        statistics[i] = malloc(sizeof(stats));
-
-        statistics[i]->tot_num_users = 0;
-        statistics[i]->avg_num_users = 0;
-        statistics[i]->tot_num_tasks_done = 0;
-        statistics[i]->tot_num_tasks_not_done = 0;
-        statistics[i]->avg_num_tasks_done = 0;
-        statistics[i]->avg_num_tasks_not_done = 0;
-        statistics[i]->avg_time_users_wait_tot = 0;
-        statistics[i]->avg_time_users_wait_daily = 0;
-        statistics[i]->avg_tasks_done_tot = 0;
-        statistics[i]->avg_tasks_done_daily = 0;
-        statistics[i]->prec_stats = malloc(i * sizeof(stats*));
-        for(int j = 0; j < i; j++){
-            statistics[i]->prec_stats[j] = statistics[j];
+    for(int i = 0; i < NOF_WORKERS; i++) {
+        pid = fork();
+        if (pid == 0) {
+            execv("./worker", (char*[]){ "worker", NULL });
+            perror("execv worker failed");
+            exit(1);
         }
-        statistics[i]->num_workers_active_daily = 0;
-        statistics[i]->num_workers_active_tot = 0;
-        statistics[i]->avg_num_pause_daily = 0;
-        statistics[i]->num_pause_tot = 0;
-        statistics[i]->num_ratio_worker_user = 0;
     }
 
-    return statistics;
+    for(int i = 0; i < NOF_USERS; i++) {
+        pid = fork();
+        if (pid == 0) {
+            execv("./user", (char*[]){ "user", NULL });
+            perror("execv user failed");
+            exit(1);
+        }
+    }
+
+//------------------------------------------------------------------------
+
+
+
+
+//------------------------------------------------------------------------------
+    // Cleanup
+    shmdt(shared_stats);
+    shmdt(shared_seats);
+    shmdt(shared_timer);
+    
+    shmctl(shmid_stats, IPC_RMID, NULL);
+    shmctl(shmid_seats, IPC_RMID, NULL);
+    shmctl(shmid_timer, IPC_RMID, NULL);
+
+    msgctl(msgid, IPC_RMID, NULL);
+    semctl(semid, 0, IPC_RMID);
+
+    exit(0);
 }
 
 int leggi_parametro(const char *file_path, const char *parametro) {
@@ -133,30 +136,45 @@ int leggi_parametro(const char *file_path, const char *parametro) {
     exit(EXIT_FAILURE);
 }
 
-void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_timer, int SIM_DURATION, int NOF_WORKERSEATS, stats** shared_stats, worker_seat **shared_seats, clock_t *shared_timer){
 
+void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_timer, int SIM_DURATION, int NOF_WORKERSEATS,
+                       stats **shared_stats, worker_seat **shared_seats, clock_t **shared_timer){
+    
+    // Create shared memory segments for the actual structures, not pointers
     *shmid_stats = shmget(SHM_KEY_STATS, SIM_DURATION * sizeof(stats), IPC_CREAT | 0666);
+    if (*shmid_stats == -1) {
+        perror("shmget stats failed");
+        exit(EXIT_FAILURE);
+    }
 
     *shmid_seats = shmget(SHM_KEY_SEATS, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
+    if (*shmid_seats == -1) {
+        perror("shmget seats failed");
+        exit(EXIT_FAILURE);
+    }
 
     *shmid_timer = shmget(SHM_KEY_TIMER, sizeof(clock_t), IPC_CREAT | 0666);
-
-    stats **shared_stats = (stats **)shmat(shmid_stats, NULL, 0);
-    if (shared_stats == (void *)-1) {
-        perror("Error attaching shared memory for stats");
+    if (*shmid_timer == -1) {
+        perror("shmget timer failed");
         exit(EXIT_FAILURE);
     }
 
-    worker_seat **shared_seats = (worker_seat **)shmat(shmid_seats, NULL, 0);
-    if (shared_seats == (void *)-1) {
-        perror("Error attaching shared memory for worker seats");
+    // Attach shared memory
+    *shared_stats = (stats *)shmat(*shmid_stats, NULL, 0);
+    if (*shared_stats == (void *)-1) {
+        perror("shmat stats failed");
         exit(EXIT_FAILURE);
     }
 
-    clock_t *shared_timer = (int *)shmat(shmid_timer, NULL, 0);
-    if (shared_timer == (void *)-1) {
-        perror("Error attaching shared memory for timer");
+    *shared_seats = (worker_seat *)shmat(*shmid_seats, NULL, 0);
+    if (*shared_seats == (void *)-1) {
+        perror("shmat seats failed");
         exit(EXIT_FAILURE);
     }
 
+    *shared_timer = (clock_t *)shmat(*shmid_timer, NULL, 0);
+    if (*shared_timer == (void *)-1) {
+        perror("shmat timer failed");
+        exit(EXIT_FAILURE);
+    }
 }

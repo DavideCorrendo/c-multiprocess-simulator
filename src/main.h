@@ -79,7 +79,8 @@ union semun {
     unsigned short *array;
 };
 
-worker_seat **Create_seatwork(int );
+void initialization_shm(int *, int *, int *, int, int, stats **, worker_seat **, clock_t **);
+int leggi_parametro(const char *, const char *);
 
 
 #endif
