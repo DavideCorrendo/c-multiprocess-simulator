@@ -12,21 +12,19 @@ void main(int argc, char **argv) {
     int NOF_WORKERSEATS = atoi(argv[1]);
     int NOF_WORKERS = atoi(argv[2]);
     int NOF_USERS = atoi(argv[3]);
-    int N_NANO_SEC = atoi(argv[4]);
+    unsigned long long int N_NANO_SEC = atoi(argv[4]);
     int N_OF_PAUSE = atoi(argv[5]);
 
 
     int shmid_stats;
     int shmid_seats;
-    int shmid_timer;
 
     stats *shared_stats;
     worker_seat *shared_seats;
-    clock_t *shared_timer;
 
     // Create and initialize shared memory
-    initialization_shm(&shmid_stats, &shmid_seats, &shmid_timer, SIM_DURATION, NOF_WORKERSEATS,
-                       &shared_stats, &shared_seats, &shared_timer);
+    initialization_shm(&shmid_stats, &shmid_seats, SIM_DURATION, NOF_WORKERSEATS,
+                       &shared_stats, &shared_seats);
 
     // Initialize the shared memory contents
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
@@ -54,9 +52,11 @@ void main(int argc, char **argv) {
         shared_stats[i].num_ratio_worker_user = 0;
     }
 
-    *shared_timer = 0;
 
     // Create message queue and semaphores
+    struct message msg;
+    msg.mtype = 0;
+    msg.mtext[0] = "\0";
     int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
     int semid = semget(SEM_KEY, 3 + NOF_WORKERSEATS, IPC_CREAT | 0666);
 
@@ -90,18 +90,30 @@ void main(int argc, char **argv) {
 
 //------------------------------------------------------------------------
 
+    char *inizio = "inizio";
+    char *fine = "fine";
 
+    for(int i = 0; i < SIM_DURATION; i++){
+        msg.mtype = 0;
+        str(msg.mtext, inizio);
+        msgsnd(msgid, &msg, sizeof(struct message), 0);
+        simulate_day(N_NANO_SEC);
+        strcpy(msg.mtext, fine);
+        msgsnd(msgid, &msg, sizeof(struct message), 0);
+        print_stats(shared_stats[i]);     //<--------------------------------------
+    }
+
+
+    //scrivere EXPLODE
 
 
 //------------------------------------------------------------------------------
     // Cleanup
     shmdt(shared_stats);
     shmdt(shared_seats);
-    shmdt(shared_timer);
     
     shmctl(shmid_stats, IPC_RMID, NULL);
     shmctl(shmid_seats, IPC_RMID, NULL);
-    shmctl(shmid_timer, IPC_RMID, NULL);
 
     msgctl(msgid, IPC_RMID, NULL);
     semctl(semid, 0, IPC_RMID);
@@ -137,8 +149,8 @@ int leggi_parametro(const char *file_path, const char *parametro) {
 }
 
 
-void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_timer, int SIM_DURATION, int NOF_WORKERSEATS,
-                       stats **shared_stats, worker_seat **shared_seats, clock_t **shared_timer){
+void initialization_shm(int *shmid_stats, int *shmid_seats, int SIM_DURATION, int NOF_WORKERSEATS,
+                       stats **shared_stats, worker_seat **shared_seats){
     
     // Create shared memory segments for the actual structures, not pointers
     *shmid_stats = shmget(SHM_KEY_STATS, SIM_DURATION * sizeof(stats), IPC_CREAT | 0666);
@@ -150,12 +162,6 @@ void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_timer, in
     *shmid_seats = shmget(SHM_KEY_SEATS, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
     if (*shmid_seats == -1) {
         perror("shmget seats failed");
-        exit(EXIT_FAILURE);
-    }
-
-    *shmid_timer = shmget(SHM_KEY_TIMER, sizeof(clock_t), IPC_CREAT | 0666);
-    if (*shmid_timer == -1) {
-        perror("shmget timer failed");
         exit(EXIT_FAILURE);
     }
 
@@ -172,9 +178,35 @@ void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_timer, in
         exit(EXIT_FAILURE);
     }
 
-    *shared_timer = (clock_t *)shmat(*shmid_timer, NULL, 0);
-    if (*shared_timer == (void *)-1) {
-        perror("shmat timer failed");
-        exit(EXIT_FAILURE);
+    
+}
+
+void simulate_day(unsigned long long nanos_per_minute) {
+    struct timespec start_time, current_time;
+    unsigned long long elapsed_nanos = 0;
+    int simulated_minutes = 0;
+
+    // Record the starting time
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    printf("Simulating a day with 1 simulated minute = %llu nanoseconds of real time...\n", nanos_per_minute);
+
+    while (simulated_minutes < 480) { // 480 minutes for 8h of work
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
+
+        // Calculate elapsed time in nanoseconds
+        elapsed_nanos = (current_time.tv_sec - start_time.tv_sec) * 1000000000ULL +
+                        (current_time.tv_nsec - start_time.tv_nsec);
+
+        // Check if a simulated minute has passed
+        if (elapsed_nanos >= nanos_per_minute * (simulated_minutes + 1)) {
+            simulated_minutes++;
+            //printf("Simulated Time: %02d:%02d (HH:MM)\n", simulated_minutes / 60, simulated_minutes % 60);
+        }
+
+        // Sleep for a short while to reduce CPU usage
+        usleep(100);
     }
+
+    printf("Simulation complete: A full day has passed in simulated time.\n");
 }

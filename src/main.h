@@ -12,7 +12,10 @@
 
 #define SEM_KEY       567891234
 
-#define MAX_MSG_SIZE 500
+#define MAX_MSG_SIZE  500
+
+#define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +36,10 @@
 #include <sys/signal.h>
 
 #define _POSIX_C_SOURCE 200809L
+
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1 
+#endif
 
 enum tasks{
         send_receive_parcels = 1,
@@ -79,7 +86,7 @@ union semun {
     unsigned short *array;
 };
 
-void initialization_shm(int *, int *, int *, int, int, stats **, worker_seat **, clock_t **);
+void initialization_shm(int *, int *, int, int, stats **, worker_seat **);
 int leggi_parametro(const char *, const char *);
 
 
