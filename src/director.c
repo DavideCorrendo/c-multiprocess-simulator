@@ -77,6 +77,10 @@ void main(int argc, char **argv) {
             perror("execv worker failed");
             exit(1);
         }
+        msg.MACRO = NOF_WORKERS;
+        msgsnd(msgid, &msg, sizeof(msg.MACRO), 0);
+        msg.MACRO = NOF_WORKERSEATS;
+        msgsnd(msgid, &msg, sizeof(msg.MACRO), 0);
     }
 
     for(int i = 0; i < NOF_USERS; i++) {
@@ -94,13 +98,14 @@ void main(int argc, char **argv) {
     char *fine = "fine";
 
     for(int i = 0; i < SIM_DURATION; i++){
+        tasks_assignment(shared_seats);  //<---------------------------------------- FINIRE BASTARDO
         msg.mtype = 0;
         str(msg.mtext, inizio);
         msgsnd(msgid, &msg, sizeof(struct message), 0);
         simulate_day(N_NANO_SEC);
         strcpy(msg.mtext, fine);
         msgsnd(msgid, &msg, sizeof(struct message), 0);
-        print_stats(shared_stats[i]);     //<--------------------------------------
+        print_stats(shared_stats[i]);     //<--------------------------------------   FINIRE BASTARDO
     }
 
 
@@ -121,33 +126,6 @@ void main(int argc, char **argv) {
     exit(0);
 }
 
-int leggi_parametro(const char *file_path, const char *parametro) {
-    FILE *file = fopen(file_path, "r");
-    if (file == NULL) {
-        perror("Errore nell'apertura del file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[MAX_LINE_LENGTH];
-    while (fgets(line, sizeof(line), file)) {
-        // Elimina il carattere di newline, se presente
-        line[strcspn(line, "\n")] = 0;
-
-        // Cerca la chiave specificata
-        char *key = strtok(line, "=");
-        char *value = strtok(NULL, "=");
-
-        if (key != NULL && value != NULL && strcmp(key, parametro) == 0) {
-            fclose(file);
-            return atoi(value); // Ritorna il valore come intero
-        }
-    }
-
-    fclose(file);
-    fprintf(stderr, "Parametro '%s' non trovato in '%s'\n", parametro, file_path);
-    exit(EXIT_FAILURE);
-}
-
 
 void initialization_shm(int *shmid_stats, int *shmid_seats, int SIM_DURATION, int NOF_WORKERSEATS,
                        stats **shared_stats, worker_seat **shared_seats){
@@ -159,7 +137,7 @@ void initialization_shm(int *shmid_stats, int *shmid_seats, int SIM_DURATION, in
         exit(EXIT_FAILURE);
     }
 
-    *shmid_seats = shmget(SHM_KEY_SEATS, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
+    *shmid_seats = shmget(SHM_KEY_SEATS, NOF_WORKERSEATS + 3, IPC_CREAT | 0666);
     if (*shmid_seats == -1) {
         perror("shmget seats failed");
         exit(EXIT_FAILURE);

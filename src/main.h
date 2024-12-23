@@ -78,6 +78,7 @@ typedef struct stats{
 struct message {
     long mtype;
     char mtext[MAX_MSG_SIZE];
+    int MACRO;
 };
 
 union semun {
@@ -88,6 +89,8 @@ union semun {
 
 void initialization_shm(int *, int *, int, int, stats **, worker_seat **);
 int leggi_parametro(const char *, const char *);
-
+int initSem(int semId, int value);
+int reserveSem(int semId);
+int releaseSem(int semId);
 
 #endif
