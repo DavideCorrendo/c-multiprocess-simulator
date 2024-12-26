@@ -1,6 +1,8 @@
 #include "main.h"
 #define NOF_PAUSE 6
 
+void working_time(worker_seat *shared_seats, stats *shared_stats, int *shared_macros, enum tasks task, int id_worker, struct message msg, int msgid);
+
 int main(){
 
     struct message msg;
@@ -51,6 +53,22 @@ int main(){
     stats *shared_stats = shmat(shmid_stats, NULL, 0);
     worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
 
+    int home_exception = rand() % (20 + 1);
+    int home_counter = 0;
+    int pause_done = 0;
+
+    while ((pause_done < NOF_PAUSE) && (home_counter < home_exception)) {
+        working_time(shared_seats, shared_stats, shared_macros, task, id_worker, msg, msgid);
+        usleep(100);
+        /*------------------------------AGGIORNA LE STATISTICHE----------------------------------*/
+        pause_done++;
+        home_counter++;
+    }
+   
+    return 1;
+} 
+
+void working_time(worker_seat *shared_seats, stats *shared_stats, int *shared_macros, enum tasks task, int id_worker, struct message msg, int msgid) {
     bool sentinel_conditions = false;
     for(int i = 0; i < shared_macros[1] && !sentinel_conditions; i++) {
         if(task == shared_seats[i].task) {
@@ -62,6 +80,8 @@ int main(){
         }
     }
 
+    int pause_counter = 0;
+    int pause_exception = rand() % (10 + 1);
     bool pause = false;
     msg.mtype = 3 /*?*/;
 
@@ -80,7 +100,10 @@ int main(){
             perror("msgsnd");
             exit(1);
         }
-    }
 
-    return 1;
+        pause_counter++;
+        if(pause_counter == pause_exception) {
+            pause = true;
+        }
+    }
 }
