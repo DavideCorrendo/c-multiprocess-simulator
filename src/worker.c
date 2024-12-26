@@ -1,4 +1,5 @@
 #include "main.h"
+#define NOF_PAUSE 6
 
 int main(){
 
@@ -61,15 +62,24 @@ int main(){
         }
     }
 
-    msg.mtype = /*?*/;
+    bool pause = false;
+    msg.mtype = 3 /*?*/;
 
-    while( /*WE ALREADY MUST DEFINE THE CONDITION FOR EXIT TO THE WAIT CICLE*/) {     /*<------------IT MUST BE MODIFIED BECAUSE IT'S AN ACTIVE WAIT*/
-        if(msgrcv(shared_seats->id, &msg, sizeof(struct message), /*?*/) == -1) {
+    while(!pause) {     /*<------------CHECK*/
+        if(msgrcv(msgid, &msg, sizeof(msg.mtext), /*?*/) == -1) {
             perror("msgrcv");
             exit(1);
         }
 
-        
+        /*TASK EXECUTION*/
+        usleep(100);
+
+        msg.mtext[MAX_MSG_SIZE] = "Task complete";
+
+        if(msgsnd(msgid, &msg, sizeof(struct message), 0) == -1) {
+            perror("msgsnd");
+            exit(1);
+        }
     }
 
     return 1;
