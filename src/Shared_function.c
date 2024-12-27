@@ -27,26 +27,36 @@ int leggi_parametro(const char *file_path, const char *parametro) {
     exit(EXIT_FAILURE);
 }
 
-int initSem(int semId, int value) {
+// Function to perform semaphore operation on a specific semaphore in the set
+int sem_operation(int semid, int sem_num, int op_value) {
+    struct sembuf sem_op;
+    
+    // Configure the operation
+    sem_op.sem_num = sem_num;  // Specify which semaphore in the set
+    sem_op.sem_op = op_value;  // Operation value (-1 for P, +1 for V)
+    sem_op.sem_flg = 0;        // No special flags
+    
+    // Perform the operation
+    return semop(semid, &sem_op, 1);
+}
+
+// Example usage functions
+int wait_semaphore(int semid, int sem_num) {
+    return sem_operation(semid, sem_num, -1);
+}
+
+int signal_semaphore(int semid, int sem_num) {
+    return sem_operation(semid, sem_num, 1);
+}
+
+// Initialize a specific semaphore in the set
+int init_semaphore(int semid, int sem_num, int value) {
     union semun arg;
     arg.val = value;
-    return semctl(semId, 0, SETVAL, arg);
+    return semctl(semid, sem_num, SETVAL, arg);
 }
 
-// Funzione per eseguire una P (wait) sul semaforo
-int reserveSem(int semId) {
-    struct sembuf sops;
-    sops.sem_num = 0;
-    sops.sem_op = -1; // Decrementa il valore
-    sops.sem_flg = 0;
-    return semop(semId, &sops, 1);
-}
-
-// Funzione per eseguire una V (signal) sul semaforo
-int releaseSem(int semId) {
-    struct sembuf sops;
-    sops.sem_num = 0;
-    sops.sem_op = 1; // Incrementa il valore
-    sops.sem_flg = 0;
-    return semop(semId, &sops, 1);
+// Get the value of a specific semaphore
+int get_semaphore_value(int semid, int sem_num) {
+    return semctl(semid, sem_num, GETVAL, 0);
 }

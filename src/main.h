@@ -15,10 +15,11 @@
 
 #define MAX_MSG_SIZE    500
 
-#define NUM_MACROS      3
+#define NUM_MACROS      5
 
 #define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
 
+#define N_NANO_SEC 1000
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,8 +62,8 @@ typedef struct worker_seat{
 }worker_seat;
 
 typedef struct stats{
-    int tot_num_users;
-    int avg_num_users;
+    int tot_num_users_tot;
+    int avg_num_users_daily;
     int tot_num_tasks_done;
     int tot_num_tasks_not_done;
     int avg_num_tasks_done;
@@ -102,13 +103,22 @@ union semun {
     unsigned short *array;
 };
 
+
 void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
                        stats **shared_stats, worker_seat **shared_seats, int **shared_macros);
 int leggi_parametro(const char *, const char *);
 int initSem(int semId, int value);
 int reserveSem(int semId);
 int releaseSem(int semId);
+int get_semaphore_value(int semid, int sem_num);
 void print_stats(stats stat);
 void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_macros);
+int sem_operation(int semid, int sem_num, int op_value);
+int wait_semaphore(int semid, int sem_num);
+int signal_semaphore(int semid, int sem_num);
+int init_semaphore(int semid, int sem_num, int value);
+int get_semaphore_value(int semid, int sem_num);
+void working_time(worker_seat *, stats *, int *, int, int, struct message, int, int);
+
 
 #endif

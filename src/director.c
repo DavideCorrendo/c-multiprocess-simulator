@@ -12,8 +12,7 @@ int main(int argc, char **argv) {
     int NOF_WORKERSEATS = atoi(argv[1]);
     int NOF_WORKERS = atoi(argv[2]);
     int NOF_USERS = atoi(argv[3]);
-    unsigned long long int N_NANO_SEC = atoi(argv[4]);
-    int N_OF_PAUSE = atoi(argv[5]);
+    int N_OF_PAUSE = atoi(argv[4]);
 
 
     int shmid_stats;
@@ -37,8 +36,8 @@ int main(int argc, char **argv) {
     }
 
     for(int i = 0; i < SIM_DURATION; i++) {
-   shared_stats[i].tot_num_users = 0;
-   shared_stats[i].avg_num_users = 0;
+   shared_stats[i].tot_num_users_tot = 0;
+   shared_stats[i].avg_num_users_daily = 0;
    shared_stats[i].tot_num_tasks_done = 0;
    shared_stats[i].tot_num_tasks_not_done = 0;
    shared_stats[i].avg_num_tasks_done = 0;
@@ -72,6 +71,8 @@ int main(int argc, char **argv) {
     shared_macros[0] = NOF_WORKERS;
     shared_macros[1] = NOF_WORKERSEATS;
     shared_macros[2] = 0;
+    shared_macros[3] = SIM_DURATION;
+    shared_macros[4] = N_OF_PAUSE; 
 
     // Create message queue and semaphores
     struct message msg;
@@ -122,7 +123,7 @@ int main(int argc, char **argv) {
         msg.mtype = 1;
         strcpy(msg.mtext, inizio);
         msgsnd(msgid, &msg, sizeof(struct message), 0);
-        simulate_day(N_NANO_SEC, &shared_macros[2]);
+        simulate_day(&shared_macros[2]);
         strcpy(msg.mtext, fine);
         msgsnd(msgid, &msg, sizeof(struct message), 0);
         explode(explode_threshold, semid, shared_macros[1]);  
@@ -189,14 +190,14 @@ void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, i
     
 }
 
-void simulate_day(unsigned long long nanos_per_minute, int *simulated_minutes) {
+void simulate_day(int *simulated_minutes) {
     struct timespec start_time, current_time;
     unsigned long long elapsed_nanos = 0;
 
     // Record the starting time
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-    printf("Simulating a day with 1 simulated minute = %llu nanoseconds of real time...\n", nanos_per_minute);
+    printf("Simulating a day with 1 simulated minute = %llu nanoseconds of real time...\n", N_NANO_SEC);
 
     while (*simulated_minutes < 480) { // 480 minutes for 8h of work
         clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -206,7 +207,7 @@ void simulate_day(unsigned long long nanos_per_minute, int *simulated_minutes) {
                         (current_time.tv_nsec - start_time.tv_nsec);
 
         // Check if a simulated minute has passed
-        if (elapsed_nanos >= nanos_per_minute * (*simulated_minutes + 1)) {
+        if (elapsed_nanos >= N_NANO_SEC * (*simulated_minutes + 1)) {
             *simulated_minutes++;
             //printf("Simulated Time: %02d:%02d (HH:MM)\n", *simulated_minutes / 60, *simulated_minutes % 60);
         }
@@ -220,7 +221,7 @@ void simulate_day(unsigned long long nanos_per_minute, int *simulated_minutes) {
 
 void print_stats(stats stat){
     printf("\n=== Daily Statistics ===\n");
-    printf("Users: Total=%d, Avg=%.2f\n", stat.tot_num_users, stat.avg_num_users);
+    printf("Users: Total=%d, Avg=%.2f\n", stat.tot_num_users_tot, stat.avg_num_users_daily);
     printf("Tasks: Done=%d, Not Done=%d\n", stat.tot_num_tasks_done, stat.tot_num_tasks_not_done);
     printf("Wait Time: Daily=%.2f, Total=%.2f\n", stat.avg_time_users_wait_daily, stat.avg_time_users_wait_tot);
     printf("Active Workers: %d, W/U Ratio: %.2f\n", stat.num_workers_active_daily, stat.num_ratio_worker_user);
@@ -296,8 +297,7 @@ void explode(int explode_threshold, int semid, int NOF_WORKERSEATS) {
     }
 
     if (total_waiting >= explode_threshold) {
-        printf("\nWARNING: Number of waiting users (%d) exceeded threshold (%d)\n", 
-               total_waiting, explode_threshold);
+        printf("\nWARNING: Number of waiting users (%d) exceeded threshold (%d)\n", total_waiting, explode_threshold);
         printf("Emergency shutdown initiated\n");
         exit(EXIT_FAILURE);
     }
