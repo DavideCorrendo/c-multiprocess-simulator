@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
         shared_seats[i].worker_id = 0;
     }
 
-    for(int i = 0; i < SIM_DURATION; i++) {
+for(int i = 0; i < SIM_DURATION; i++) {
    shared_stats[i].tot_num_users_tot = 0;
    shared_stats[i].avg_num_users_daily = 0;
    shared_stats[i].tot_num_tasks_done = 0;
@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
    shared_stats[i].avg_tasks_done_daily = 0;
    
    // Initialize per-service statistics
-   for(int service = 0; service < 6; service++) {
+    for(int service = 0; service < 6; service++) {
        shared_stats[i].prev_stats_tot_users[service] = 0;
        shared_stats[i].prev_stats_avg_users[service] = 0;
        shared_stats[i].prev_stats_tot_tasks_done[service] = 0;
@@ -61,25 +61,37 @@ int main(int argc, char **argv) {
        shared_stats[i].prev_stats_avg_done_daily[service] = 0;
    }
 
-   shared_stats[i].num_workers_active_daily = 0;
-   shared_stats[i].num_workers_active_tot = 0;
-   shared_stats[i].avg_num_pause_daily = 0;
-   shared_stats[i].num_pause_tot = 0;
-   shared_stats[i].num_ratio_worker_user = 0;
-}
+    shared_stats[i].num_workers_active_daily = 0;
+    shared_stats[i].num_workers_active_tot = 0;
+    shared_stats[i].avg_num_pause_daily = 0;
+    shared_stats[i].num_pause_tot = 0;
+    for(int j = 0; j < shared_macros[1]; i++){
+        shared_stats[i].num_ratio_worker_user[j] = 0;
+    }
+    shared_stats[i].num_ratio_worker_user[NOF_WORKERSEATS] = -1;
+}   
 
     shared_macros[0] = NOF_WORKERS;
     shared_macros[1] = NOF_WORKERSEATS;
     shared_macros[2] = 0;
     shared_macros[3] = SIM_DURATION;
     shared_macros[4] = N_OF_PAUSE; 
+    shared_macros[5] = false;
+    shared_macros[6] = 0;
+    shared_macros[7] = 0;
+    for(int i = 0; i < SIM_DURATION; i++){
+        shared_macros[8 + i] = 0;
+        shared_macros[8 + SIM_DURATION + i] = 0;
+    }
+
 
     // Create message queue and semaphores
     struct message msg;
     msg.mtype = 0;
     msg.mtext[0] = NULL;
     int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    int semid = semget(SEM_KEY, 1 + NOF_WORKERSEATS, IPC_CREAT | 0666);
+    int semid = semget(SEM_KEY, 5 + NOF_WORKERSEATS, IPC_CREAT | 0666);
+
 
     // Create all processes
     pid_t pid;
@@ -115,10 +127,12 @@ int main(int argc, char **argv) {
 
 //------------------------------------------------------------------------
 
-    char *inizio = "inizio";
-    char *fine = "fine";
+    char inizio[10] = "inizio";
+    char fine[10] = "fine";
 
     for(int i = 0; i < SIM_DURATION; i++){
+        initSem(semid, 5 + NOF_WORKERSEATS);
+        shared_macros[6] = 0;
         tasks_assignment(shared_seats, shared_stats[i], shared_macros); 
         msg.mtype = 1;
         strcpy(msg.mtext, inizio);
@@ -130,6 +144,9 @@ int main(int argc, char **argv) {
         print_stats(shared_stats[i]);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
+
+    char *fine_simulazione[15] = "fine simulazione";
+    strcpy(msg.mtext, fine_simulazione);
 
 
 //------------------------------------------------------------------------------

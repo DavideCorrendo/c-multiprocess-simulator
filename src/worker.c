@@ -20,8 +20,7 @@ int main(){
 
     msgrcv(msgid, &msg, sizeof(msg.num), 2, 0);
     id_worker = msg.num;
-    msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
-    time_task = msg.num;
+
 
     int shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * 2, 0);
     if(shmid_macros == -1) {
@@ -35,7 +34,7 @@ int main(){
         perror("semget");
         exit(1);
     }
-    initSem(semid, 0);
+
 
     int shmid_stats;
     int shmid_seats;
@@ -55,15 +54,28 @@ int main(){
     stats *shared_stats = shmat(shmid_stats, NULL, 0);
     worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
 
-    int home_exception = rand() % (20 + 1);
-    int home_counter = 0;
-    int pause_done = 0;
     
-    for(int i = 0; i < shared_macros[4]; i++) {
+
+    int time_task[6] = TIMES_ARRAY;
+    int pause_counter = 0;
+    bool active = false;
+    
+    for(int i = 0; i < shared_macros[3]; i++) {  
+
+        wait_semaphore(semid, shared_macros[1]);
+        shared_stats[i].num_ratio_worker_user[task]++;
+        signal_semaphore(semid, shared_macros[1]);
 
         while(!find_seat(&shared_seats, shared_macros, task, id_worker, semid)){sleep(0.001);};
 
-        working_time(&shared_seats, &shared_stats, shared_macros, task, time_task, id_worker, msg, msgid, semid);    
+        wait_semaphore(semid, shared_macros[1]);
+        shared_stats[i].num_workers_active_daily++;
+        if(active == false){shared_stats[i].num_workers_active_tot++; 
+                            active = true;}
+        signal_semaphore(semid, shared_macros[1]);
+
+        working_time(&shared_seats, &shared_stats, shared_macros, task, time_task, 
+        id_worker, msg, msgid, semid, pause_counter, i);    
 
     }
     
@@ -71,32 +83,58 @@ int main(){
     return 1;
 } 
 
-void working_time(worker_seat *shared_seats, stats *shared_stats, int *shared_macros, enum tasks task, int avg_time_task, int id_worker, struct message msg, int msgid, int semid) {
+void working_time(worker_seat *shared_seats, stats *shared_stats, int *shared_macros, enum tasks task, int avg_time_task, int id_worker, struct message msg, int msgid, int semid, int pause_counter, int day) {
     
-    
+    char s[10] = "done";
+
     msgrcv(msgid, &msg, sizeof(struct message), 1, 0);
+    bool pause = false;
+    int start_task;
+    int end_task;
 
-    while(msg.mtext != "end"){
+    while(msg.mtext != "end" && pause == false){
 
-        msgrcv(msgid, &msg, sizeof(struct message), 3, 0);
+        msgrcv(msgid, &msg, sizeof(struct message), 9 + id_worker, 0);
+        start_task = shared_macros[2];
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;
         time_task *= avg_time_task;
         usleep(time_task * N_NANO_SEC);
-        msg.mtext = "done";     //<-------UN TIPO DI MESSAGGI PER OGNI USER (PORCO DIO)(DA FARE)
-        msg.mtype = 3;
+        end_task = shared_macros[2];
+        strcpy(msg.mtext, s);    
+        msg.mtype = 9 + id_worker;
         msgsnd(msgid, &msg, sizeof(struct message), 0);
 
-        //AGGIORNA STATS
+        wait_semaphore(semid, shared_macros[1] + 2);
+        shared_macros[6]++;
+        shared_macros[8 + shared_macros[3] + day] += (end_task - start_task);
+        signal_semaphore(semid, shared_macros[1] + 2);
 
-        if((rand() % 100) <= 10){
-            shared_stats->
+        if(((rand() % 100) <= 10) && pause_counter == shared_macros[4]){
+            pause_counter++;
+            wait_semaphore(semid, day);
+
+            shared_stats[day].num_pause_tot++;
+            if(day > 0){
+                shared_stats[day].avg_num_pause_daily = (shared_stats[day].num_pause_tot - shared_stats[day - 1].num_pause_tot) / shared_macros[0];
+            }else{
+                shared_stats[day].avg_num_pause_daily = shared_stats[day].num_pause_tot / shared_macros[0];
+            }
+
+            signal_semaphore(semid, day);
+            pause = true;
         }
 
         msgrcv(msgid, &msg, sizeof(struct message), 1, IPC_NOWAIT);
 
     }
-    
+
+    wait_semaphore(semid, shared_macros[1] + 1);
+    if(shared_macros[5] == false && pause == false){
+        update_stats();
+        shared_macros[5] = true;
+    }
+    signal_semaphore(semid, shared_macros[1] + 1);
 
 }
 
@@ -116,4 +154,61 @@ bool find_seat(worker_seat *shared_seats, int *shared_macros, enum tasks task, i
     }
     return sentinel_conditions;
 
+}
+
+void update_stats(stats *shared_stats, int semid, int day, int num_users, int *shared_macros, enum tasks task, worker_seat *shared_seats){
+
+    wait_semaphore(semid, shared_macros[1]);
+
+    shared_stats[day].tot_num_users_tot = shared_macros[6];
+    shared_stats[day].avg_num_users_daily = shared_macros[6] / shared_macros[0];
+    shared_stats[day].tot_num_tasks_done = shared_macros[6];
+    shared_stats[day].tot_num_tasks_not_done = shared_macros[7];
+    shared_stats[day].avg_num_tasks_done = shared_macros[6] / shared_macros[0];                                                           
+    shared_stats[day].avg_num_tasks_not_done = shared_macros[7] / shared_macros[0];
+    shared_stats[day].avg_time_users_wait_tot = calculate_avg_time_wait(day, shared_macros);
+    shared_stats[day].avg_time_users_wait_daily = shared_macros[8 + day] / (shared_macros[6] + shared_macros[7]);
+    shared_stats[day].avg_tasks_done_tot = calculate_avg_time_task(day, shared_macros);
+    shared_stats[day].avg_tasks_done_daily = shared_macros[8 + shared_macros[2] + day] / (shared_macros[6] + shared_macros[7]);                                                                                                                               
+    for(int i = 0; i < shared_macros[1]; i++){
+        shared_stats[day].num_ratio_worker_user[i] /= ratio_worker_seats(task, shared_macros, shared_seats);   //<----------
+    }
+
+    signal_semaphore(semid, shared_macros[1]);
+
+}
+
+float calculate_avg_time_wait(int day, int *shared_macros){
+
+    float tot_wait = 0;
+
+    for(int i = 0; i < day; i++){
+        tot_wait += shared_macros[8 + i];
+    }
+    tot_wait = tot_wait / day;
+    return tot_wait / shared_macros[0];
+
+}
+
+float calculate_avg_time_task(int day, int *shared_macros){
+
+    float tot_wait = 0;
+
+    for(int i = 0; i < day; i++){
+        tot_wait += shared_macros[8 + shared_macros[2] + i];
+    }
+    tot_wait = tot_wait / day;
+    return tot_wait / shared_macros[0];
+    
+}
+
+double ratio_worker_seats(enum tasks task, int *shared_macros, worker_seat *shared_seats){
+    int seats_per_task = 0;
+
+    for(int i = 0; i < shared_macros[1]; i++){
+        if(shared_seats[i].task == task){
+            seats_per_task++;
+        }
+    }
+    return seats_per_task;
 }

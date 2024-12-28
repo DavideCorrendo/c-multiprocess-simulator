@@ -12,14 +12,18 @@
 
 #define SEM_KEY         567891234
 
-
 #define MAX_MSG_SIZE    500
 
-#define NUM_MACROS      5
+#define NUM_MACROS      100
 
 #define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
 
 #define N_NANO_SEC 1000
+
+#define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
+
+#define P_SERV_MIN 20 
+#define P_SERV_MAX 60
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,10 +72,10 @@ typedef struct stats{
     int tot_num_tasks_not_done;
     int avg_num_tasks_done;
     int avg_num_tasks_not_done;
-    clock_t avg_time_users_wait_tot;
-    clock_t avg_time_users_wait_daily;
-    clock_t avg_tasks_done_tot;
-    clock_t avg_tasks_done_daily;
+    float avg_time_users_wait_tot;
+    float avg_time_users_wait_daily;
+    float avg_tasks_done_tot;
+    float avg_tasks_done_daily;
 
     int prev_stats_tot_users[6];
     int prev_stats_avg_users[6];
@@ -79,16 +83,16 @@ typedef struct stats{
     int prev_stats_tot_tasks_not_done[6];
     int prev_stats_avg_tasks_done[6];
     int prev_stats_avg_tasks_not_done[6];
-    clock_t prev_stats_avg_wait_tot[6];
-    clock_t prev_stats_avg_wait_daily[6];
-    clock_t prev_stats_avg_done_tot[6];
-    clock_t prev_stats_avg_done_daily[6];
+    float prev_stats_avg_wait_tot[6];
+    float prev_stats_avg_wait_daily[6];
+    float prev_stats_avg_done_tot[6];
+    float prev_stats_avg_done_daily[6];
 
     int num_workers_active_daily;
     int num_workers_active_tot;
     int avg_num_pause_daily;
     int num_pause_tot;
-    double num_ratio_worker_user;
+    double num_ratio_worker_user[100];
 }stats;
 
 struct message {

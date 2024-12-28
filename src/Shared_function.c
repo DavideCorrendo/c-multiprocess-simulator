@@ -60,3 +60,12 @@ int init_semaphore(int semid, int sem_num, int value) {
 int get_semaphore_value(int semid, int sem_num) {
     return semctl(semid, sem_num, GETVAL, 0);
 }
+
+int initSem(int semid, int num_sems){
+    for (int i = 0; i < num_sems; i++) {
+        if (semctl(semid, i, SETVAL, 0) == -1) {
+            perror("semctl error");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
