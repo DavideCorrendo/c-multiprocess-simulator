@@ -1,6 +1,6 @@
 #include "main.h"
 
-int main(){
+int main() {
     struct message msg;
 
     enum tasks task;

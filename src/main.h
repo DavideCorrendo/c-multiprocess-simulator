@@ -24,6 +24,7 @@
 
 #define P_SERV_MIN 20 
 #define P_SERV_MAX 60
+//#define P_SERV (rand() % (P_SERV_MAX -  P_SERV_MIN + 1) + P_SERV_MIN)  <----------------------------DA VEDERE SE GIUSTO A CAUSA DELLA DIVERSITA CHE DEVE ESSERCI TRA LE VA RIE P_SERV
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,6 +95,17 @@ typedef struct stats{
     int num_pause_tot;
     double num_ratio_worker_user[100];
 }stats;
+
+//WE CAN DO IN ALTERNATIVE WAY AN HASH TABLE, IF WE WANT
+//WE MUST ADD ANOTHER SHARED MEMORY SEGMENT AND ANOTHER SEMAPHOR, IF WE WANT TO DO THIS NEW STRUCT
+/*typedef struct table {      //<-------------------THIS IS THE TABLE STRUCT FOR THE SERVICE TABLE THAT THE USERS MUST SEE TO KNOW WHAT SERVICE ARE PROVIDED FOR ALL DAY------------->
+    bool send_receive_parcels;
+    bool send_receive_letters_registered;
+    bool withdrawals_deposits;
+    bool bill_payments;
+    bool purchase_financial_products;
+    bool purchase_watches_bracelets;
+}table;*/
 
 struct message {
     long mtype;

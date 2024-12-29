@@ -1,9 +1,11 @@
 #include "main.h"
 
 int main() {
-    
+    int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;
 
-    //<------------------GO OR NOT AT THE POSTAL OFFICE------------------------->
+    int decision = rand() % 101;
+
+    if(P_SERV != decision) exit(0);
 
     struct message msg;
 
@@ -42,4 +44,13 @@ int main() {
         exit(1);
     }
     stats *shared_stats = shmat(shmid_stats, NULL, 0);
+
+    //<----------------TIME DECISION---------------------------->
+
+    //go to the postal office
+    usleep(100);
+
+    //<---------------WATCH WHAT TASKS ARE AVIABLE------------------>
+
+    
 }
