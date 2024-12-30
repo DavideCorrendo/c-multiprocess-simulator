@@ -8,9 +8,7 @@ int main() {
 
     // chose a random task
     srand(time(NULL));
-    enum tasks task;
-    int random = rand() % 7;
-    task = (enum tasks)random;
+    int task = rand() % 6;
 
     //initializzation
     int msgid = msgget(MSG_KEY, 0);
@@ -60,7 +58,7 @@ int main() {
     
     return 1;
 }
-void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats) {
+void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats) {
     msg.mtype = 4;
     msgsnd(msgid, &msg, sizeof(struct message), 0);
     msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
@@ -82,5 +80,5 @@ void office_time(struct message msg, enum tasks task, int msgid, int semid, int 
 void task_time(struct message msg, int msgid, int semid, int *shared_macros) {
     wait_semaphore(semid, shared_macros[1]- 1);
     msg.mtype = 10;
-    msgsnd();
+    //msgsnd();
 }
