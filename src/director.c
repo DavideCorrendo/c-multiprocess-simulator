@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
         shared_seats[i].id = i;
         shared_seats[i].busy = false;
-        shared_seats[i].task = 0;
+        shared_seats[i].task = send_receive_parcels;  
         shared_seats[i].worker_id = 0;
     }
 
@@ -44,11 +44,18 @@ for(int i = 0; i < SIM_DURATION; i++) {
    shared_stats[i].avg_num_tasks_not_done = 0;
    shared_stats[i].avg_time_users_wait_tot = 0;
    shared_stats[i].avg_time_users_wait_daily = 0;
-   shared_stats[i].avg_tasks_done_tot = 0;
-   shared_stats[i].avg_tasks_done_daily = 0;
+   shared_stats[i].avg_time_tasks_done_tot = 0;
+   shared_stats[i].avg_time_tasks_done_daily = 0;
    
    // Initialize per-service statistics
     for(int service = 0; service < 6; service++) {
+        shared_stats[i].prev_time_task_daily[service] = 0;
+        shared_stats[i].prev_time_task_tot[service] = 0;
+        shared_stats[i].prev_time_wait_daily[service] = 0;
+        shared_stats[i].prev_time_wait_tot[service];
+
+
+
        shared_stats[i].prev_stats_tot_users[service] = 0;
        shared_stats[i].prev_stats_avg_users[service] = 0;
        shared_stats[i].prev_stats_tot_tasks_done[service] = 0;
@@ -65,7 +72,7 @@ for(int i = 0; i < SIM_DURATION; i++) {
     shared_stats[i].num_workers_active_tot = 0;
     shared_stats[i].avg_num_pause_daily = 0;
     shared_stats[i].num_pause_tot = 0;
-    for(int j = 0; j < shared_macros[1]; i++){
+    for(int j = 0; j < shared_macros[1]; j++){
         shared_stats[i].num_ratio_worker_user[j] = 0;
     }
     shared_stats[i].num_ratio_worker_user[NOF_WORKERSEATS] = -1;
@@ -76,22 +83,25 @@ for(int i = 0; i < SIM_DURATION; i++) {
     shared_macros[2] = 0;
     shared_macros[3] = SIM_DURATION;
     shared_macros[4] = N_OF_PAUSE; 
-    shared_macros[5] = false;
-    shared_macros[6] = 0;
-    shared_macros[7] = 0;
-    for(int i = 0; i < SIM_DURATION; i++){
-        shared_macros[8 + i] = 0;
-        shared_macros[8 + SIM_DURATION + i] = 0;
-    }
 
 
     // Create message queue and semaphores
     struct message msg;
     msg.mtype = 0;
-    msg.mtext[0] = NULL;
+    msg.mtext[0] = '\0';
+    msg.num = 0;
+    
     int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    int semid = semget(SEM_KEY, 5 + NOF_WORKERSEATS, IPC_CREAT | 0666);
+    if (msgid == -1) {
+        perror("msgget failed");
+        exit(EXIT_FAILURE);
+    }
 
+    int semid = semget(SEM_KEY, 2 + NOF_WORKERSEATS, IPC_CREAT | 0666);
+    if (semid == -1) {
+        perror("semget failed");
+        exit(EXIT_FAILURE);
+    }
 
     // Create all processes
     pid_t pid;
@@ -113,7 +123,7 @@ for(int i = 0; i < SIM_DURATION; i++) {
         }
         msg.num = i + 1;
         msgsnd(msgid, &msg, sizeof(msg.num), 0);
-        usleep(100);//time to make worker process the right message before changes
+        usleep(500);//time to make worker process the right message before changes
     }
 
     for(int i = 0; i < NOF_USERS; i++) {
@@ -127,33 +137,39 @@ for(int i = 0; i < SIM_DURATION; i++) {
 
 //------------------------------------------------------------------------
 
-    char inizio[10] = "inizio";
-    char fine[10] = "fine";
+    char start[10] = "start";
+    char end[10] = "end";
 
-    for(int i = 0; i < SIM_DURATION; i++){
+    for(int i = 1; i <= SIM_DURATION; i++){
         initSem(semid, 5 + NOF_WORKERSEATS);
         shared_macros[6] = 0;
         tasks_assignment(shared_seats, shared_stats[i], shared_macros); 
         msg.mtype = 1;
-        strcpy(msg.mtext, inizio);
-        msgsnd(msgid, &msg, sizeof(struct message), 0);
+        strcpy(msg.mtext, start);
+        msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
         simulate_day(&shared_macros[2]);
-        strcpy(msg.mtext, fine);
-        msgsnd(msgid, &msg, sizeof(struct message), 0);
-        explode(explode_threshold, semid, shared_macros[1]);  
+        strcpy(msg.mtext, end);
+        msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
+        if(num_user_waiting(semid, shared_macros) >= explode_threshold){
+            exit(EXIT_FAILURE);
+        } 
         print_stats(shared_stats[i]);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
-    char *fine_simulazione[15] = "fine simulazione";
-    strcpy(msg.mtext, fine_simulazione);
+    strcpy(msg.mtext, end);
+    msg.mtype = 5;
+    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
 
 
 //------------------------------------------------------------------------------
     // Cleanup
+
+    shmdt(shared_macros); 
     shmdt(shared_stats);
     shmdt(shared_seats);
     
+    shmctl(shmid_macros, IPC_RMID, NULL);
     shmctl(shmid_stats, IPC_RMID, NULL);
     shmctl(shmid_seats, IPC_RMID, NULL);
 
@@ -214,7 +230,7 @@ void simulate_day(int *simulated_minutes) {
     // Record the starting time
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-    printf("Simulating a day with 1 simulated minute = %llu nanoseconds of real time...\n", N_NANO_SEC);
+    printf("Simulating a day with 1 simulated minute = %d nanoseconds of real time...\n", N_NANO_SEC);
 
     while (*simulated_minutes < 480) { // 480 minutes for 8h of work
         clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -225,7 +241,7 @@ void simulate_day(int *simulated_minutes) {
 
         // Check if a simulated minute has passed
         if (elapsed_nanos >= N_NANO_SEC * (*simulated_minutes + 1)) {
-            *simulated_minutes++;
+            (*simulated_minutes)++;
             //printf("Simulated Time: %02d:%02d (HH:MM)\n", *simulated_minutes / 60, *simulated_minutes % 60);
         }
 
@@ -295,17 +311,11 @@ void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_m
     }
 }
 
-void explode(int explode_threshold, int semid, int NOF_WORKERSEATS) {
-    union semun {
-            int val;
-            struct semid_ds *buf;
-            unsigned short *array;
-    }arg;
+int num_user_waiting(int semid, int *shared_macros) {
     int total_waiting = 0;
     
     // Check only worker seat semaphores
-    for (int i = 0; i < NOF_WORKERSEATS; i++) {
-        
+    for (int i = 0; i < shared_macros[1]; i++) {
         // Get number of processes waiting for zero on this semaphore
         int waiting = semctl(semid, i, GETZCNT, arg);
         if (waiting != -1) {
@@ -313,11 +323,7 @@ void explode(int explode_threshold, int semid, int NOF_WORKERSEATS) {
         }
     }
 
-    if (total_waiting >= explode_threshold) {
-        printf("\nWARNING: Number of waiting users (%d) exceeded threshold (%d)\n", total_waiting, explode_threshold);
-        printf("Emergency shutdown initiated\n");
-        exit(EXIT_FAILURE);
-    }
+    return total_waiting;
 }
 
 int reset_ipc(int semid, int num_sem) {

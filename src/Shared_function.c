@@ -69,3 +69,46 @@ int initSem(int semid, int num_sems){
         }
     }
 }
+
+int worker_per_task(int* shared_macros, worker_seat *shared_seats, enum tasks task){
+    int cont = 0;
+    for(int i = 0; i < shared_macros[0]; i++){
+        if(shared_seats[i].task = task){
+            cont++;
+        }
+    }
+    return cont;
+}
+
+void get_function(int *msgid, int *shmid_macros, int *shmid_stats, int *shmid_seats, int *semid, int *shared_macros, stats *shared_stats, worker_seat *shared_seats){
+
+    *msgid = msgget(MSG_KEY, 0);
+
+    *shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * NUM_MACROS, 0);
+    if(shmid_macros == -1) {
+        perror("shmget");
+        exit(1);
+    }
+    shared_macros = shmat(shmid_macros, NULL, 0);
+
+    *semid = semget(SEM_KEY, shared_macros[1] + 5, 0);
+    if(semid == -1) {
+        perror("semget");
+        exit(1);
+    }
+
+    *shmid_stats = shmget(SHM_KEY_STATS, sizeof(stats) * shared_macros[3], 0);
+    if(shmid_stats == -1) {
+        perror("shmget");
+        exit(1);
+    }
+    shared_stats = shmat(shmid_stats, NULL, 0);
+
+    *shmid_seats = shmget(SHM_KEY_SEATS, shared_macros[1] * sizeof(worker_seat), 0);
+    if(shmid_seats == -1) {
+        perror("shmget");
+        exit(1);
+    }
+    shared_seats = shmat(shmid_seats, NULL, 0);
+
+}

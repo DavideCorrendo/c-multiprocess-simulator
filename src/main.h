@@ -1,4 +1,3 @@
-
 #ifndef DIRECTOR
 #define DIRECTOR
 
@@ -67,6 +66,14 @@ typedef struct worker_seat{
 }worker_seat;
 
 typedef struct stats{
+
+    int user_served_daily;
+    int user_not_served_daily;
+    int tot_waiting_time;
+    int daily_waiting_time;
+    int time_task_tot;
+    int time_task_daily;
+
     int tot_num_users_tot;
     int avg_num_users_daily;
     int tot_num_tasks_done;
@@ -75,19 +82,28 @@ typedef struct stats{
     int avg_num_tasks_not_done;
     float avg_time_users_wait_tot;
     float avg_time_users_wait_daily;
-    float avg_tasks_done_tot;
-    float avg_tasks_done_daily;
+    float avg_time_tasks_done_tot;
+    float avg_time_tasks_done_daily;
+
+    int prev_user_served_daily[6];
+    int prev_time_task_daily[6];
+    int prev_time_task_tot[6];
+    int prev_time_wait_daily[6];
+    int prev_time_wait_tot[6];
 
     int prev_stats_tot_users[6];
     int prev_stats_avg_users[6];
     int prev_stats_tot_tasks_done[6];
-    int prev_stats_tot_tasks_not_done[6];
+    int prev_stats_tot_tasks_not_done[6];  //
     int prev_stats_avg_tasks_done[6];
-    int prev_stats_avg_tasks_not_done[6];
+    int prev_stats_avg_tasks_not_done[6]; //
+
     float prev_stats_avg_wait_tot[6];
     float prev_stats_avg_wait_daily[6];
     float prev_stats_avg_done_tot[6];
     float prev_stats_avg_done_daily[6];
+
+    int num_pause_daily_tot;
 
     int num_workers_active_daily;
     int num_workers_active_tot;
@@ -96,16 +112,6 @@ typedef struct stats{
     double num_ratio_worker_user[100];
 }stats;
 
-//WE CAN DO IN ALTERNATIVE WAY AN HASH TABLE, IF WE WANT
-//WE MUST ADD ANOTHER SHARED MEMORY SEGMENT AND ANOTHER SEMAPHOR, IF WE WANT TO DO THIS NEW STRUCT
-/*typedef struct table {      //<-------------------THIS IS THE TABLE STRUCT FOR THE SERVICE TABLE THAT THE USERS MUST SEE TO KNOW WHAT SERVICE ARE PROVIDED FOR ALL DAY------------->
-    bool send_receive_parcels;
-    bool send_receive_letters_registered;
-    bool withdrawals_deposits;
-    bool bill_payments;
-    bool purchase_financial_products;
-    bool purchase_watches_bracelets;
-}table;*/
 
 struct message {
     long mtype;
@@ -117,7 +123,7 @@ union semun {
     int val;
     struct semid_ds *buf;
     unsigned short *array;
-};
+}arg;
 
 
 void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
@@ -135,6 +141,8 @@ int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void working_time(worker_seat *, stats *, int *, int, int, struct message, int, int);
+int worker_per_task(int* , worker_seat *, enum tasks );
+void get_function(int *, int *, int *, int *, int *, int *, stats *, worker_seat *);
 
 
 #endif
