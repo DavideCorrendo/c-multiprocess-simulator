@@ -61,8 +61,9 @@ int main() {
     return 1;
 }
 void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats) {
+    msg.mtype = 4;
+    msgsnd(msgid, &msg, sizeof(struct message), 0);
     msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
-    //scrivi msgsnd
     if(msg.num == -1) {
         return;
     }
