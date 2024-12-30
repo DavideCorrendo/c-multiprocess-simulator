@@ -1,19 +1,44 @@
-#include "main.h"
+#include "main.h"  
+
+void handle_child_exit(int sig) {
+    int status;
+    pid_t pid;
+    
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (WIFEXITED(status)) {
+            printf("Process %d terminated with status: ", pid);
+            if (WEXITSTATUS(status) == EXIT_SUCCESS) {
+                printf("SUCCESS\n");
+            } else {
+                printf("FAILURE (code %d)\n", WEXITSTATUS(status));
+            }
+        } else if (WIFSIGNALED(status)) {
+            printf("Process %d killed by signal %d\n", pid, WTERMSIG(status));
+        }
+    }
+}
 
 int main(int argc, char **argv) {
-    // Read configuration parameters
+    struct sigaction sa;
+    sa.sa_handler = handle_child_exit;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction failed");
+        exit(EXIT_FAILURE);
+    }
+
     const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
 
     int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
     int explode_threshold = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
 
-    // Get command line arguments
     int NOF_WORKERSEATS = atoi(argv[1]);
     int NOF_WORKERS = atoi(argv[2]);
     int NOF_USERS = atoi(argv[3]);
     int N_OF_PAUSE = atoi(argv[4]);
-
 
     int shmid_stats;
     int shmid_seats;
@@ -23,60 +48,55 @@ int main(int argc, char **argv) {
     worker_seat *shared_seats;
     int *shared_macros;
 
-    // Create and initialize shared memory
     initialization_shm(&shmid_stats, &shmid_seats, &shmid_macros, SIM_DURATION, NOF_WORKERSEATS,
                        &shared_stats, &shared_seats, &shared_macros);
 
-    // Initialize the shared memory contents
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
         shared_seats[i].id = i;
         shared_seats[i].busy = false;
-        shared_seats[i].task = send_receive_parcels;  
+        shared_seats[i].task = 0;  
         shared_seats[i].worker_id = 0;
     }
 
-for(int i = 0; i < SIM_DURATION; i++) {
-   shared_stats[i].tot_num_users_tot = 0;
-   shared_stats[i].avg_num_users_daily = 0;
-   shared_stats[i].tot_num_tasks_done = 0;
-   shared_stats[i].tot_num_tasks_not_done = 0;
-   shared_stats[i].avg_num_tasks_done = 0;
-   shared_stats[i].avg_num_tasks_not_done = 0;
-   shared_stats[i].avg_time_users_wait_tot = 0;
-   shared_stats[i].avg_time_users_wait_daily = 0;
-   shared_stats[i].avg_time_tasks_done_tot = 0;
-   shared_stats[i].avg_time_tasks_done_daily = 0;
+    for(int i = 0; i < SIM_DURATION; i++) {
+        shared_stats[i].tot_num_users_tot = 0;
+        shared_stats[i].avg_num_users_daily = 0;
+        shared_stats[i].tot_num_tasks_done = 0;
+        shared_stats[i].tot_num_tasks_not_done = 0;
+        shared_stats[i].avg_num_tasks_done = 0;
+        shared_stats[i].avg_num_tasks_not_done = 0;
+        shared_stats[i].avg_time_users_wait_tot = 0;
+        shared_stats[i].avg_time_users_wait_daily = 0;
+        shared_stats[i].avg_time_tasks_done_tot = 0;
+        shared_stats[i].avg_time_tasks_done_daily = 0;
    
-   // Initialize per-service statistics
-    for(int service = 0; service < 6; service++) {
-        shared_stats[i].prev_time_task_daily[service] = 0;
-        shared_stats[i].prev_time_task_tot[service] = 0;
-        shared_stats[i].prev_time_wait_daily[service] = 0;
-        shared_stats[i].prev_time_wait_tot[service];
+        for(int service = 0; service < 6; service++) {
+            shared_stats[i].prev_time_task_daily[service] = 0;
+            shared_stats[i].prev_time_task_tot[service] = 0;
+            shared_stats[i].prev_time_wait_daily[service] = 0;
+            shared_stats[i].prev_time_wait_tot[service] = 0;
 
+            shared_stats[i].prev_stats_tot_users[service] = 0;
+            shared_stats[i].prev_stats_avg_users[service] = 0;
+            shared_stats[i].prev_stats_tot_tasks_done[service] = 0;
+            shared_stats[i].prev_stats_tot_tasks_not_done[service] = 0;
+            shared_stats[i].prev_stats_avg_tasks_done[service] = 0;
+            shared_stats[i].prev_stats_avg_tasks_not_done[service] = 0;
+            shared_stats[i].prev_stats_avg_wait_tot[service] = 0;
+            shared_stats[i].prev_stats_avg_wait_daily[service] = 0;
+            shared_stats[i].prev_stats_avg_done_tot[service] = 0;
+            shared_stats[i].prev_stats_avg_done_daily[service] = 0;
+        }
 
-
-       shared_stats[i].prev_stats_tot_users[service] = 0;
-       shared_stats[i].prev_stats_avg_users[service] = 0;
-       shared_stats[i].prev_stats_tot_tasks_done[service] = 0;
-       shared_stats[i].prev_stats_tot_tasks_not_done[service] = 0;
-       shared_stats[i].prev_stats_avg_tasks_done[service] = 0;
-       shared_stats[i].prev_stats_avg_tasks_not_done[service] = 0;
-       shared_stats[i].prev_stats_avg_wait_tot[service] = 0;
-       shared_stats[i].prev_stats_avg_wait_daily[service] = 0;
-       shared_stats[i].prev_stats_avg_done_tot[service] = 0;
-       shared_stats[i].prev_stats_avg_done_daily[service] = 0;
-   }
-
-    shared_stats[i].num_workers_active_daily = 0;
-    shared_stats[i].num_workers_active_tot = 0;
-    shared_stats[i].avg_num_pause_daily = 0;
-    shared_stats[i].num_pause_tot = 0;
-    for(int j = 0; j < shared_macros[1]; j++){
-        shared_stats[i].num_ratio_worker_user[j] = 0;
-    }
-    shared_stats[i].num_ratio_worker_user[NOF_WORKERSEATS] = -1;
-}   
+        shared_stats[i].num_workers_active_daily = 0;
+        shared_stats[i].num_workers_active_tot = 0;
+        shared_stats[i].avg_num_pause_daily = 0;
+        shared_stats[i].num_pause_tot = 0;
+        for(int j = 0; j < shared_macros[1]; j++){
+            shared_stats[i].num_ratio_worker_user[j] = 0;
+        }
+        shared_stats[i].num_ratio_worker_user[NOF_WORKERSEATS] = -1;
+    }   
 
     shared_macros[0] = NOF_WORKERS;
     shared_macros[1] = NOF_WORKERSEATS;
@@ -84,8 +104,6 @@ for(int i = 0; i < SIM_DURATION; i++) {
     shared_macros[3] = SIM_DURATION;
     shared_macros[4] = N_OF_PAUSE; 
 
-
-    // Create message queue and semaphores
     struct message msg;
     msg.mtype = 0;
     msg.mtext[0] = '\0';
@@ -103,14 +121,13 @@ for(int i = 0; i < SIM_DURATION; i++) {
         exit(EXIT_FAILURE);
     }
 
-    // Create all processes
     pid_t pid;
 
     pid = fork();
     if (pid == 0) {
         execv("./ticket_erogator", (char*[]){ "ticket_erogator", NULL });
         perror("execv ticket_erogator failed");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     msg.mtype = 2;
@@ -119,11 +136,11 @@ for(int i = 0; i < SIM_DURATION; i++) {
         if (pid == 0) {
             execv("./worker", (char*[]){ "worker", NULL });
             perror("execv worker failed");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         msg.num = i + 1;
         msgsnd(msgid, &msg, sizeof(msg.num), 0);
-        usleep(500);//time to make worker process the right message before changes
+        usleep(500);
     }
 
     for(int i = 0; i < NOF_USERS; i++) {
@@ -131,11 +148,11 @@ for(int i = 0; i < SIM_DURATION; i++) {
         if (pid == 0) {
             execv("./user", (char*[]){ "user", NULL });
             perror("execv user failed");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
 
-//------------------------------------------------------------------------
+    //--------------------------------------------------
 
     char start[10] = "start";
     char end[10] = "end";
@@ -151,19 +168,18 @@ for(int i = 0; i < SIM_DURATION; i++) {
         strcpy(msg.mtext, end);
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
         if(num_user_waiting(semid, shared_macros) >= explode_threshold){
+            printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             exit(EXIT_FAILURE);
         } 
         print_stats(shared_stats[i]);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
+    //--------------------------------------------------
+
     strcpy(msg.mtext, end);
     msg.mtype = 5;
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
-
-
-//------------------------------------------------------------------------------
-    // Cleanup
 
     shmdt(shared_macros); 
     shmdt(shared_stats);
@@ -176,8 +192,10 @@ for(int i = 0; i < SIM_DURATION; i++) {
     msgctl(msgid, IPC_RMID, NULL);
     semctl(semid, 0, IPC_RMID);
 
-    return 1;
+    printf("Simulation completed successfully\n");
+    return EXIT_SUCCESS;
 }
+
 
 
 void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
@@ -296,7 +314,7 @@ void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_m
             seats = (seats > 0 && failure_rates[service] > 0) ? seats : 1;
             
             for(int j = 0; j < seats && current_seat < shared_macros[1]; j++) {
-                shared_seats[current_seat].task = service + 1;
+                shared_seats[current_seat].task = service;
                 current_seat++;
             }
         }
@@ -305,25 +323,10 @@ void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_m
     // Distribute remaining seats evenly
     while(current_seat < shared_macros[1]) {
         for(int service = 0; service < 6 && current_seat < shared_macros[1]; service++) {
-            shared_seats[current_seat].task = service + 1;
+            shared_seats[current_seat].task = service;
             current_seat++;
         }
     }
-}
-
-int num_user_waiting(int semid, int *shared_macros) {
-    int total_waiting = 0;
-    
-    // Check only worker seat semaphores
-    for (int i = 0; i < shared_macros[1]; i++) {
-        // Get number of processes waiting for zero on this semaphore
-        int waiting = semctl(semid, i, GETZCNT, arg);
-        if (waiting != -1) {
-            total_waiting += waiting;
-        }
-    }
-
-    return total_waiting;
 }
 
 int reset_ipc(int semid, int num_sem) {

@@ -70,7 +70,7 @@ int initSem(int semid, int num_sems){
     }
 }
 
-int worker_per_task(int* shared_macros, worker_seat *shared_seats, enum tasks task){
+int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task){
     int cont = 0;
     for(int i = 0; i < shared_macros[0]; i++){
         if(shared_seats[i].task = task){
@@ -91,7 +91,7 @@ void get_function(int *msgid, int *shmid_macros, int *shmid_stats, int *shmid_se
     }
     shared_macros = shmat(shmid_macros, NULL, 0);
 
-    *semid = semget(SEM_KEY, shared_macros[1] + 5, 0);
+    *semid = semget(SEM_KEY, shared_macros[1] + 2, 0);
     if(semid == -1) {
         perror("semget");
         exit(1);
@@ -111,4 +111,20 @@ void get_function(int *msgid, int *shmid_macros, int *shmid_stats, int *shmid_se
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
+}
+
+
+int num_user_waiting(int semid, int *shared_macros) {
+    int total_waiting = 0;
+    
+    // Check only worker seat semaphores
+    for (int i = 0; i < shared_macros[1]; i++) {
+        // Get number of processes waiting for zero on this semaphore
+        int waiting = semctl(semid, i, GETZCNT, arg);
+        if (waiting != -1) {
+            total_waiting += waiting;
+        }
+    }
+
+    return total_waiting;
 }

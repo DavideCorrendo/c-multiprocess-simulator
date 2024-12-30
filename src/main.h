@@ -1,6 +1,8 @@
 #ifndef DIRECTOR
 #define DIRECTOR
 
+#define _GNU_SOURCE
+
 #define MAX_LINE_LENGTH 100
 
 #define SHM_KEY_STATS   123456789
@@ -32,35 +34,20 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/msg.h>
-#include <ctype.h>
-#include <sys/types.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
 #include <sys/ipc.h>
 #include <unistd.h>
 #include <errno.h>
-#include <limits.h>
 #include <signal.h>
-#include <sys/signal.h>
-
-#define _POSIX_C_SOURCE 200809L
 
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC 1 
 #endif
 
-enum tasks{
-        send_receive_parcels = 1,
-        send_receive_letters_registered,
-        withdrawals_deposits,
-        bill_payments,
-        purchase_financial_products,
-        purchase_watches_bracelets,
-};
-
 typedef struct worker_seat{
     size_t id;
-    enum tasks task;
+    int task;
     bool busy;
     int worker_id;
 }worker_seat;
@@ -126,8 +113,7 @@ union semun {
 }arg;
 
 
-void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
-                       stats **shared_stats, worker_seat **shared_seats, int **shared_macros);
+void initialization_shm(int *, int *, int *, int , int , stats **, worker_seat **, int **);
 int leggi_parametro(const char *, const char *);
 int initSem(int semId, int value);
 int reserveSem(int semId);
@@ -141,8 +127,13 @@ int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void working_time(worker_seat *, stats *, int *, int, int, struct message, int, int);
-int worker_per_task(int* , worker_seat *, enum tasks );
+int worker_per_task(int* , worker_seat *, int );
 void get_function(int *, int *, int *, int *, int *, int *, stats *, worker_seat *);
+bool find_seat(worker_seat *, int *, int , int , int );
+void update_stats(stats *, int , int , int *, int task, worker_seat *, int , int );
+float ratio_worker_seats(int , int *, worker_seat *);
+int num_user_waiting(int semid, int *shared_macros);
+
 
 
 #endif
