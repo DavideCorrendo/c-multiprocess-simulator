@@ -1,151 +1,185 @@
 #include "main.h"
 
+static int shmid_stats = -1;
+static int shmid_seats = -1;
+static int shmid_macros = -1;
+static int msgid = -1;
+static int semid = -1;
+static stats *shared_stats = NULL;
+static worker_seat *shared_seats = NULL;
+static int *shared_macros = NULL;
 
-int main(){
+// Cleanup function
+void cleanup_resources() {
+    // Detach from shared memory segments
+    if (shared_stats != NULL) {
+        shmdt(shared_stats);
+        shared_stats = NULL;
+    }
+    if (shared_seats != NULL) {
+        shmdt(shared_seats);
+        shared_seats = NULL;
+    }
+    if (shared_macros != NULL) {
+        shmdt(shared_macros);
+        shared_macros = NULL;
+    }
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+}
+
+// Signal handler
+void signal_handler(int signum) {
+    cleanup_resources();
+    exit(signum);
+}
+
+int main(int argc, char *argv[]) {
 
     struct message msg;
-
     const char *file_timeout = "config_timeout.conf";
     int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
 
-    int id_worker;
-    int shmid_stats;
-    int shmid_seats;
-    int shmid_macros;
-    int msgid;
-    int semid;
+    int id_worker = atoi(argv[1]);
 
-    int *shared_macros;
-    worker_seat *shared_seats;
-    stats *shared_stats;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 
     srand(time(NULL));
     int task = rand() % 6;
 
-    get_function(&msgid, &shmid_macros, shmid_stats, &shmid_seats, &semid, shared_macros, shared_stats, shared_seats);
+    // Initialize shared memory and IPC resources
+    get_function(&msgid, &shmid_macros, &shmid_stats, &shmid_seats, &semid);
 
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
-    id_worker = msg.num;
+    shared_macros = shmat(shmid_macros, NULL, 0);
+    if (shared_macros == (void *)-1) {
+        perror("shmat failed for macros");
+        exit(EXIT_FAILURE);
+    }
 
-    int *shared_macros = shmat(shmid_macros, NULL, 0);
-    stats *shared_stats = shmat(shmid_stats, NULL, 0);
-    worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
+    shared_stats = shmat(shmid_stats, NULL, 0);
+    if (shared_stats == (void *)-1) {
+        perror("shmat failed for stats");
+        exit(EXIT_FAILURE);
+    }
 
-    
+    shared_seats = shmat(shmid_seats, NULL, 0);
+    if (shared_seats == (void *)-1) {
+        perror("shmat failed for seats");
+        exit(EXIT_FAILURE);
+    }
 
     int time_tasks[6] = TIMES_ARRAY;
     int pause_counter = 0;
-    
-    for(int i = 1; i <= shared_macros[3] && strcmp(msg.mtext, "end") != 0; i++) {  
+    memset(&msg, 0, sizeof(msg));
 
+    for (int i = 1; i <= shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
         wait_semaphore(semid, shared_macros[1]);
         shared_stats[i].num_ratio_worker_user[task]++;
         signal_semaphore(semid, shared_macros[1]);
 
-        while(!find_seat(&shared_seats, shared_macros, task, id_worker, semid)){usleep(15000);};
+        while (!find_seat(shared_seats, shared_macros, task, id_worker, semid)) {
+            msgrcv(msgid, &msg, sizeof(struct message), 1, IPC_NOWAIT);
+            if(strcmp(msg.mtext, "end") == 0)continue;
+            usleep(1000);
+        }
 
-        working_time(&shared_seats, &shared_stats, shared_macros, task, time_tasks[task], 
-        id_worker, &msg, msgid, semid, pause_counter, i);  
-
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, IPC_NOWAIT);  
-
+        working_time(shared_seats, shared_stats, shared_macros, task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, i);
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, IPC_NOWAIT);
     }
-    
-   
+
+    cleanup_resources();
     exit(EXIT_SUCCESS);
-} 
+}
 
 void working_time(worker_seat *shared_seats, stats *shared_stats, int *shared_macros, int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day) {
-    
     char s[10] = "done";
 
     msgrcv(msgid, msg, sizeof(struct message), 1, 0);
     bool pause = false;
-    int start_task;
-    int end_task;
-    int user_served = 0;
-    int time_task_count = 0;
-    int num_pause_daily = 0;
+    int start_task, end_task, user_served = 0, time_task_count = 0, wait_time = 0;
 
-    while(strcmp(msg->mtext, "end") != 0 && pause == false){
-
+    while (strcmp(msg->mtext, "end") != 0 && !pause) {
         msgrcv(msgid, msg, sizeof(struct message), 5 + id_worker, 0);
+        wait_time += msg->num;
         start_task = shared_macros[2];
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;
         time_task *= avg_time_task;
         usleep(time_task * N_NANO_SEC);
 
-
         end_task = shared_macros[2];
-        strcpy(msg->mtext, s);    
-        msg->mtype = 9 + id_worker;
+        strcpy(msg->mtext, s);
+        msg->mtype = 5 + id_worker;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
         time_task_count += (end_task - start_task);
 
-        if(((rand() % 100) <= 10) && pause_counter < shared_macros[4]){
+        if (((rand() % 100) <= 10) && pause_counter < shared_macros[4]) {
             pause_counter++;
-            num_pause_daily++;    
             pause = true;
         }
 
         msgrcv(msgid, msg, sizeof(struct message), 1, IPC_NOWAIT);
-
     }
 
     usleep(1500);
     wait_semaphore(semid, shared_macros[1]);
-
-    update_stats(shared_stats, semid, day, shared_macros, task, shared_seats, user_served, time_task_count);
-
+    update_stats(shared_stats, semid, day, shared_macros, task, shared_seats, user_served, time_task_count, pause, wait_time);
     signal_semaphore(semid, shared_macros[1]);
-
 }
 
-bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid){
-
-    bool sentinel_conditions = false;
-    for(int i = 0; i < shared_macros[1] && !sentinel_conditions; i++) {
-        if(task == shared_seats[i].task) {
-            if(shared_seats[i].busy == false) {
-                wait_semaphore(semid, i);
+bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid) {
+    for (int i = 0; i < shared_macros[1]; i++) {
+        wait_semaphore(semid, i);
+        if (shared_seats[i].task == task && !shared_seats[i].busy) {
+            wait_semaphore(semid, i);
+            if (!shared_seats[i].busy) {
                 shared_seats[i].busy = true;
                 shared_seats[i].worker_id = id_worker;
-                sentinel_conditions = true;
                 signal_semaphore(semid, i);
+                return true;
             }
+            signal_semaphore(semid, i);
         }
+        signal_semaphore(semid, i);
     }
-    return sentinel_conditions;
-
+    return false;
 }
 
-void update_stats(stats *shared_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int time_task_count){
+void update_stats(stats *shared_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int time_task_count, bool pause, int wait_time){
 
     int num = worker_per_task(shared_macros, shared_seats, task);
 
     shared_stats[day].prev_user_served_daily[task] += user_served;
     shared_stats[day].user_served_daily += user_served;
     shared_stats[day].time_task_daily += time_task_count;
-    shared_stats[day].time_task_tot += time_task_count;
+    shared_macros[9] += time_task_count;
+    shared_macros[8] += wait_time;
     shared_stats[day].prev_time_task_daily[task] += time_task_count;
     shared_stats[day].prev_time_task_tot[task] += time_task_count;
-    if(pause == true)shared_stats[day].num_pause_daily_tot++;
+    if(pause == true){
+        shared_stats[day].num_pause_daily_tot++;
+        shared_macros[11]++;
+    }
     shared_stats[day].num_workers_active_daily++;
+    shared_macros[10]++;
 
     int num_task_not_done = num_user_waiting(semid, shared_macros);
 
-    shared_stats[day].tot_num_users_tot += user_served;
+    shared_macros[5] += user_served;
     shared_stats[day].avg_num_users_daily = shared_stats[day].user_served_daily / shared_macros[0];
-    shared_stats[day].tot_num_tasks_done += user_served;
-    shared_stats[day].tot_num_tasks_not_done = num_task_not_done;
+    shared_macros[6] += user_served;
+    shared_macros[7] = num_task_not_done;
     shared_stats[day].avg_num_tasks_done = shared_stats[day].user_served_daily / shared_macros[0];                                                           
     shared_stats[day].avg_num_tasks_not_done = num_task_not_done / shared_macros[0];
-    shared_stats[day].avg_time_users_wait_tot = shared_stats[day].tot_waiting_time / shared_stats[day].tot_num_users_tot;
+    shared_stats[day].avg_time_users_wait_tot = shared_macros[9] / shared_macros[5];
     shared_stats[day].avg_time_users_wait_daily = shared_stats[day].daily_waiting_time / shared_stats[day].user_served_daily;
-    shared_stats[day].avg_time_tasks_done_tot = shared_stats[day].time_task_tot / shared_stats[day].tot_num_users_tot;
+    shared_stats[day].avg_time_tasks_done_tot = shared_macros[9] / shared_macros[5];
     shared_stats[day].avg_time_tasks_done_daily = shared_stats[day].time_task_daily / shared_stats[day].user_served_daily;   
 
     
@@ -160,9 +194,7 @@ void update_stats(stats *shared_stats, int semid, int day, int *shared_macros, i
     shared_stats[day].prev_stats_avg_done_tot[task] = shared_stats[day].prev_time_task_tot[task] / num;
     shared_stats[day].prev_stats_avg_done_daily[task] = shared_stats[day].prev_time_task_daily[task] / num;
     
-    shared_stats[day].num_pause_tot += shared_stats[day].num_pause_daily_tot;
     shared_stats[day].avg_num_pause_daily = shared_stats[day].num_pause_daily_tot / num;
-    shared_stats[day].num_workers_active_tot += shared_stats[day].num_workers_active_daily;
 
     for(int i = 0; i < shared_macros[1]; i++){
         shared_stats[day].num_ratio_worker_user[i] = shared_macros[12 + task] / ratio_worker_seats(shared_seats[i].task, shared_macros, shared_seats);

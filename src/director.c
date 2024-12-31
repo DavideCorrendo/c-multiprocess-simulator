@@ -1,4 +1,4 @@
-#include "main.h"  
+#include "main.h"
 
 void handle_child_exit(int sig) {
     int status;
@@ -18,7 +18,22 @@ void handle_child_exit(int sig) {
     }
 }
 
+void validate_inputs(int argc, char **argv) {
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 1; i < argc; i++) {
+        if (atoi(argv[i]) <= 0) {
+            fprintf(stderr, "Error: All arguments must be positive integers.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
+    validate_inputs(argc, argv);
+
     struct sigaction sa;
     sa.sa_handler = handle_child_exit;
     sigemptyset(&sa.sa_mask);
@@ -59,44 +74,11 @@ int main(int argc, char **argv) {
     }
 
     for(int i = 0; i < SIM_DURATION; i++) {
-        shared_stats[i].tot_num_users_tot = 0;
-        shared_stats[i].avg_num_users_daily = 0;
-        shared_stats[i].tot_num_tasks_done = 0;
-        shared_stats[i].tot_num_tasks_not_done = 0;
-        shared_stats[i].avg_num_tasks_done = 0;
-        shared_stats[i].avg_num_tasks_not_done = 0;
-        shared_stats[i].avg_time_users_wait_tot = 0;
-        shared_stats[i].avg_time_users_wait_daily = 0;
-        shared_stats[i].avg_time_tasks_done_tot = 0;
-        shared_stats[i].avg_time_tasks_done_daily = 0;
-   
-        for(int service = 0; service < 6; service++) {
-            shared_stats[i].prev_time_task_daily[service] = 0;
-            shared_stats[i].prev_time_task_tot[service] = 0;
-            shared_stats[i].prev_time_wait_daily[service] = 0;
-            shared_stats[i].prev_time_wait_tot[service] = 0;
-
-            shared_stats[i].prev_stats_tot_users[service] = 0;
-            shared_stats[i].prev_stats_avg_users[service] = 0;
-            shared_stats[i].prev_stats_tot_tasks_done[service] = 0;
-            shared_stats[i].prev_stats_tot_tasks_not_done[service] = 0;
-            shared_stats[i].prev_stats_avg_tasks_done[service] = 0;
-            shared_stats[i].prev_stats_avg_tasks_not_done[service] = 0;
-            shared_stats[i].prev_stats_avg_wait_tot[service] = 0;
-            shared_stats[i].prev_stats_avg_wait_daily[service] = 0;
-            shared_stats[i].prev_stats_avg_done_tot[service] = 0;
-            shared_stats[i].prev_stats_avg_done_daily[service] = 0;
+        memset(&shared_stats[i], 0, sizeof(stats));
+        for(int j = 0; j < shared_macros[1]; j++) {
+            shared_stats[i].num_ratio_worker_user[j] = 0.0;
         }
-
-        shared_stats[i].num_workers_active_daily = 0;
-        shared_stats[i].num_workers_active_tot = 0;
-        shared_stats[i].avg_num_pause_daily = 0;
-        shared_stats[i].num_pause_tot = 0;
-        for(int j = 0; j < shared_macros[1]; j++){
-            shared_stats[i].num_ratio_worker_user[j] = 0;
-        }
-        shared_stats[i].num_ratio_worker_user[NOF_WORKERSEATS] = -1;
-    }   
+    }
 
     shared_macros[0] = NOF_WORKERS;
     shared_macros[1] = NOF_WORKERSEATS;
@@ -105,10 +87,8 @@ int main(int argc, char **argv) {
     shared_macros[4] = N_OF_PAUSE; 
 
     struct message msg;
-    msg.mtype = 0;
-    msg.mtext[0] = '\0';
-    msg.num = 0;
-    
+    memset(&msg, 0, sizeof(struct message));
+
     int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
     if (msgid == -1) {
         perror("msgget failed");
@@ -121,9 +101,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    pid_t pid;
-
-    pid = fork();
+    pid_t pid = fork();
     if (pid == 0) {
         execv("./ticket_erogator", (char*[]){ "ticket_erogator", NULL });
         perror("execv ticket_erogator failed");
@@ -134,13 +112,12 @@ int main(int argc, char **argv) {
     for(int i = 0; i < NOF_WORKERS; i++) {
         pid = fork();
         if (pid == 0) {
-            execv("./worker", (char*[]){ "worker", NULL });
+            char worker_id_str[32];
+            snprintf(worker_id_str, sizeof(worker_id_str), "%d", i + 1); 
+            execv("./worker", (char*[]){ "worker", worker_id_str, NULL });
             perror("execv worker failed");
             exit(EXIT_FAILURE);
         }
-        msg.num = i + 1;
-        msgsnd(msgid, &msg, sizeof(msg.num), 0);
-        usleep(500);
     }
 
     for(int i = 0; i < NOF_USERS; i++) {
@@ -152,32 +129,25 @@ int main(int argc, char **argv) {
         }
     }
 
-    //--------------------------------------------------
-
-    char start[10] = "start";
-    char end[10] = "end";
-
     for(int i = 1; i <= SIM_DURATION; i++){
         initSem(semid, 5 + NOF_WORKERSEATS);
         shared_macros[6] = 0;
         tasks_assignment(shared_seats, shared_stats[i], shared_macros); 
         msg.mtype = 1;
-        strcpy(msg.mtext, start);
+        strcpy(msg.mtext, "start");
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
         simulate_day(&shared_macros[2]);
-        strcpy(msg.mtext, end);
+        strcpy(msg.mtext, "end");
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
         if(num_user_waiting(semid, shared_macros) >= explode_threshold){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
-            exit(EXIT_FAILURE);
+            break;
         } 
         print_stats(shared_stats[i]);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
-    //--------------------------------------------------
-
-    strcpy(msg.mtext, end);
+    strcpy(msg.mtext, "end");
     msg.mtype = 5;
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
 
@@ -195,8 +165,6 @@ int main(int argc, char **argv) {
     printf("Simulation completed successfully\n");
     return EXIT_SUCCESS;
 }
-
-
 
 void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
                        stats **shared_stats, worker_seat **shared_seats, int **shared_macros){

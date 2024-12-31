@@ -56,14 +56,10 @@ typedef struct stats{
 
     int user_served_daily;
     int user_not_served_daily;
-    int tot_waiting_time;
     int daily_waiting_time;
-    int time_task_tot;
     int time_task_daily;
 
-    int tot_num_users_tot;
     int avg_num_users_daily;
-    int tot_num_tasks_done;
     int tot_num_tasks_not_done;
     int avg_num_tasks_done;
     int avg_num_tasks_not_done;
@@ -84,7 +80,6 @@ typedef struct stats{
     int prev_stats_tot_tasks_not_done[6];  //
     int prev_stats_avg_tasks_done[6];
     int prev_stats_avg_tasks_not_done[6]; //
-
     float prev_stats_avg_wait_tot[6];
     float prev_stats_avg_wait_daily[6];
     float prev_stats_avg_done_tot[6];
@@ -93,9 +88,7 @@ typedef struct stats{
     int num_pause_daily_tot;
 
     int num_workers_active_daily;
-    int num_workers_active_tot;
     int avg_num_pause_daily;
-    int num_pause_tot;
     double num_ratio_worker_user[100];
 }stats;
 
@@ -128,9 +121,9 @@ int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void working_time(worker_seat *, stats *, int *, int, int, struct message, int, int);
 int worker_per_task(int* , worker_seat *, int );
-void get_function(int *, int *, int *, int *, int *, int *, stats *, worker_seat *);
+void get_function(int *, int *, int *, int *, int *);
 bool find_seat(worker_seat *, int *, int , int , int );
-void update_stats(stats *, int , int , int *, int task, worker_seat *, int , int );
+void update_stats(stats *, int , int , int *, int task, worker_seat *, int , int , bool);
 float ratio_worker_seats(int , int *, worker_seat *);
 int num_user_waiting(int semid, int *shared_macros);
 
