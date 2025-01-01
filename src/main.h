@@ -5,14 +5,6 @@
 
 #define MAX_LINE_LENGTH 100
 
-#define SHM_KEY_STATS   123456789
-#define SHM_KEY_SEATS   456789123
-#define SHM_KEY_MACROS  789123456
-
-#define MSG_KEY         345678912
-
-#define SEM_KEY         567891234
-
 #define MAX_MSG_SIZE    500
 
 #define NUM_MACROS      100
@@ -52,45 +44,57 @@ typedef struct worker_seat{
     int worker_id;
 }worker_seat;
 
-typedef struct stats{
+typedef struct daily_stats{
 
     int user_served_daily;
     int user_not_served_daily;
     int daily_waiting_time;
     int time_task_daily;
 
-    int avg_num_users_daily;
-    int tot_num_tasks_not_done;
-    int avg_num_tasks_done;
-    int avg_num_tasks_not_done;
-    float avg_time_users_wait_tot;
+    float avg_num_users_daily;
+    float avg_num_tasks_done_daily;
+    float avg_num_tasks_not_done_daily;
     float avg_time_users_wait_daily;
-    float avg_time_tasks_done_tot;
     float avg_time_tasks_done_daily;
 
-    int prev_user_served_daily[6];
-    int prev_time_task_daily[6];
-    int prev_time_task_tot[6];
-    int prev_time_wait_daily[6];
-    int prev_time_wait_tot[6];
+    int time_task_daily_per_task[6];
+    int time_wait_daily_per_task[6];
 
-    int prev_stats_tot_users[6];
-    int prev_stats_avg_users[6];
-    int prev_stats_tot_tasks_done[6];
-    int prev_stats_tot_tasks_not_done[6];  //
-    int prev_stats_avg_tasks_done[6];
-    int prev_stats_avg_tasks_not_done[6]; //
-    float prev_stats_avg_wait_tot[6];
-    float prev_stats_avg_wait_daily[6];
-    float prev_stats_avg_done_tot[6];
-    float prev_stats_avg_done_daily[6];
+    float avg_num_users_daily_per_task[6];
+    float avg_num_tasks_done_daily_per_task[6];
+    float avg_num_tasks_not_done_daily_per_task[6];
+    float avg_time_users_wait_daily_per_task[6];
+    float avg_time_tasks_done_daily_per_task[6];
 
-    int num_pause_daily_tot;
+    int num_pause_daily;
 
     int num_workers_active_daily;
     int avg_num_pause_daily;
-    double num_ratio_worker_user[100];
-}stats;
+    float num_ratio_worker_user[100];
+
+}daily_stats;
+
+typedef struct tot_stats{
+
+    int wait_time;
+    int task_time;
+
+    int num_user_served;
+    int num_task_done;
+    int num_task_not_done;
+    float avg_time_wait;
+    float avg_time_task;
+
+    int wait_time_per_task[6];
+    int task_time_per_task[6];
+
+    int num_user_served_per_task[6];
+    int num_task_done_per_task[6];
+    int num_task_not_done_per_task[6];
+    float avg_time_wait_per_task[6];
+    float avg_time_task_per_task[6];
+
+}tot_stats;
 
 
 struct message {
@@ -106,26 +110,14 @@ union semun {
 }arg;
 
 
-void initialization_shm(int *, int *, int *, int , int , stats **, worker_seat **, int **);
 int leggi_parametro(const char *, const char *);
 int initSem(int semId, int value);
-int reserveSem(int semId);
-int releaseSem(int semId);
-int get_semaphore_value(int semid, int sem_num);
-void print_stats(stats stat);
-void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_macros);
-int sem_operation(int semid, int sem_num, int op_value);
 int wait_semaphore(int semid, int sem_num);
 int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
-void working_time(worker_seat *, stats *, int *, int, int, struct message, int, int);
-int worker_per_task(int* , worker_seat *, int );
-void get_function(int *, int *, int *, int *, int *);
-bool find_seat(worker_seat *, int *, int , int , int );
-void update_stats(stats *, int , int , int *, int task, worker_seat *, int , int , bool);
-float ratio_worker_seats(int , int *, worker_seat *);
-int num_user_waiting(int semid, int *shared_macros);
+void get_function(int *, int *, int *, int *, int *, int *);
+void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
 
 
 

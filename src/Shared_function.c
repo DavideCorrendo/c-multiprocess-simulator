@@ -70,58 +70,33 @@ int initSem(int semid, int num_sems){
     }
 }
 
-int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task){
-    int cont = 0;
-    for(int i = 0; i < shared_macros[0]; i++){
-        if(shared_seats[i].task == task){
-            cont++;
-        }
+
+void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_macros_key, key_t *sem_key, key_t *msg_key){
+
+    if((*shm_daily_stat_key = ftok("/tmp", 'A')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
     }
-    return cont;
-}
-
-void get_function(int *msgid, int *shmid_macros, int *shmid_stats, int *shmid_seats, int *semid){
-
-    *msgid = msgget(MSG_KEY, 0);
-
-    *shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * NUM_MACROS, 0);
-    if(shmid_macros == -1) {
-        perror("shmget");
-        exit(1);
+    if((*shm_tot_stat_key = ftok("/tmp", 'B')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
     }
-
-    *semid = semget(SEM_KEY, 100, 0);
-    if(semid == -1) {
-        perror("semget");
-        exit(1);
+    if((*shm_seats_key = ftok("/tmp", 'C')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
     }
-
-    *shmid_stats = shmget(SHM_KEY_STATS, sizeof(stats), 0);
-    if(shmid_stats == -1) {
-        perror("shmget");
-        exit(1);
+    if((*shm_macros_key = ftok("/tmp", 'D')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
     }
-
-    *shmid_seats = shmget(SHM_KEY_SEATS, 100 * sizeof(worker_seat), 0);
-    if(shmid_seats == -1) {
-        perror("shmget");
-        exit(1);
+    if((*sem_key = ftok("/tmp", 'E')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*msg_key = ftok("/tmp", 'F')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
     }
 
 }
 
-
-int num_user_waiting(int semid, int *shared_macros) {
-    int total_waiting = 0;
-    
-    // Check only worker seat semaphores
-    for (int i = 0; i < shared_macros[1]; i++) {
-        // Get number of processes waiting for zero on this semaphore
-        int waiting = semctl(semid, i, GETZCNT, arg);
-        if (waiting != -1) {
-            total_waiting += waiting;
-        }
-    }
-
-    return total_waiting;
-}

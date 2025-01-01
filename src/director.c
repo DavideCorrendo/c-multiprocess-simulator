@@ -55,16 +55,21 @@ int main(int argc, char **argv) {
     int NOF_USERS = atoi(argv[3]);
     int N_OF_PAUSE = atoi(argv[4]);
 
-    int shmid_stats;
+    int shmid_daily_stats;
+    int shmid_tot_stats;
     int shmid_seats;
     int shmid_macros;
 
-    stats *shared_stats;
+    daily_stats *shared_daily_stats;
+    tot_stats *shared_tot_stats;
     worker_seat *shared_seats;
     int *shared_macros;
 
-    initialization_shm(&shmid_stats, &shmid_seats, &shmid_macros, SIM_DURATION, NOF_WORKERSEATS,
-                       &shared_stats, &shared_seats, &shared_macros);
+    int msgid;
+    int semid;
+
+    initialization_shm(&shmid_daily_stats, &shmid_tot_stats, &shmid_seats, &shmid_macros, SIM_DURATION, NOF_WORKERSEATS,
+                       &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros, &msgid, &semid);
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
         shared_seats[i].id = i;
@@ -74,9 +79,9 @@ int main(int argc, char **argv) {
     }
 
     for(int i = 0; i < SIM_DURATION; i++) {
-        memset(&shared_stats[i], 0, sizeof(stats));
+        memset(&shared_daily_stats[i], 0, sizeof(daily_stats));
         for(int j = 0; j < shared_macros[1]; j++) {
-            shared_stats[i].num_ratio_worker_user[j] = 0.0;
+            shared_daily_stats[i].num_ratio_worker_user[j] = 0.0;
         }
     }
 
@@ -88,18 +93,6 @@ int main(int argc, char **argv) {
 
     struct message msg;
     memset(&msg, 0, sizeof(struct message));
-
-    int msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    if (msgid == -1) {
-        perror("msgget failed");
-        exit(EXIT_FAILURE);
-    }
-
-    int semid = semget(SEM_KEY, 2 + NOF_WORKERSEATS, IPC_CREAT | 0666);
-    if (semid == -1) {
-        perror("semget failed");
-        exit(EXIT_FAILURE);
-    }
 
     pid_t pid = fork();
     if (pid == 0) {
@@ -132,7 +125,7 @@ int main(int argc, char **argv) {
     for(int i = 1; i <= SIM_DURATION; i++){
         initSem(semid, 5 + NOF_WORKERSEATS);
         shared_macros[6] = 0;
-        tasks_assignment(shared_seats, shared_stats[i], shared_macros); 
+        tasks_assignment(shared_seats, shared_daily_stats[i], shared_macros); 
         msg.mtype = 1;
         strcpy(msg.mtext, "start");
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
@@ -143,7 +136,7 @@ int main(int argc, char **argv) {
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        print_stats(shared_stats[i]);     
+        print_stats(shared_daily_stats[i], shared_tot_stats, i);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
@@ -152,11 +145,13 @@ int main(int argc, char **argv) {
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
 
     shmdt(shared_macros); 
-    shmdt(shared_stats);
+    shmdt(shared_daily_stats);
+    shmdt(shared_tot_stats); 
     shmdt(shared_seats);
     
     shmctl(shmid_macros, IPC_RMID, NULL);
-    shmctl(shmid_stats, IPC_RMID, NULL);
+    shmctl(shmid_daily_stats, IPC_RMID, NULL);
+    shmctl(shmid_tot_stats, IPC_RMID, NULL);
     shmctl(shmid_seats, IPC_RMID, NULL);
 
     msgctl(msgid, IPC_RMID, NULL);
@@ -166,31 +161,53 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
-                       stats **shared_stats, worker_seat **shared_seats, int **shared_macros){
+void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid_seats, int *shmid_macros, int SIM_DURATION, int NOF_WORKERSEATS,
+                       daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, int **shared_macros, int *msgid, int *semid){
     
+
+    key_t shm_daily_stat_key;
+    key_t shm_tot_stat_key;
+    key_t shm_seats_key;
+    key_t shm_macros_key;
+    key_t sem_key;
+    key_t msg_key;
+
+    initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
+
     // Create shared memory segments for the actual structures, not pointers
-    *shmid_stats = shmget(SHM_KEY_STATS, SIM_DURATION * sizeof(stats), IPC_CREAT | 0666);
-    if (*shmid_stats == -1) {
+    *shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), IPC_CREAT | 0666);
+    if (*shmid_daily_stats == -1) {
         perror("shmget stats failed");
         exit(EXIT_FAILURE);
     }
 
-    *shmid_seats = shmget(SHM_KEY_SEATS, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
+    *shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), IPC_CREAT | 0666);
+    if (*shmid_tot_stats == -1) {
+        perror("shmget stats failed");
+        exit(EXIT_FAILURE);
+    }
+
+    *shmid_seats = shmget(shm_seats_key, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
     if (*shmid_seats == -1) {
         perror("shmget seats failed");
         exit(EXIT_FAILURE);
     }
 
-    *shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * NUM_MACROS, IPC_CREAT | 0666);
+    *shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, IPC_CREAT | 0666);
     if (*shmid_macros == -1) {
         perror("shmget macros failed");
         exit(EXIT_FAILURE);
     }
 
     // Attach shared memory
-    *shared_stats = (stats *)shmat(*shmid_stats, NULL, 0);
-    if (*shared_stats == (void *)-1) {
+    *shared_daily_stats = (daily_stats *)shmat(*shmid_daily_stats, NULL, 0);
+    if (*shared_daily_stats == (void *)-1) {
+        perror("shmat stats failed");
+        exit(EXIT_FAILURE);
+    }
+
+    *shared_tot_stats = (tot_stats*)shmat(*shmid_tot_stats, NULL, 0);
+    if (*shared_tot_stats == (void *)-1) {
         perror("shmat stats failed");
         exit(EXIT_FAILURE);
     }
@@ -205,6 +222,18 @@ void initialization_shm(int *shmid_stats, int *shmid_seats, int *shmid_macros, i
     if (*shared_macros == (void *)-1) {
         perror("shmat macros failed");
         exit(EXIT_FAILURE);
+    }
+
+    *msgid = msgget(msg_key, IPC_CREAT | 0666);
+    if (*msgid == -1) {
+        perror("msgget failed");
+        exit(EXIT_FAILURE);
+    }
+
+    *semid = semget(sem_key, 100, 0);
+    if(semid == -1) {
+        perror("semget");
+        exit(1);
     }
     
 }
@@ -238,63 +267,13 @@ void simulate_day(int *simulated_minutes) {
     printf("Simulation complete: A full day has passed in simulated time.\n");
 }
 
-void print_stats(stats stat){
-    printf("\n=== Daily Statistics ===\n");
-    printf("Users: Total=%d, Avg=%.2f\n", stat.tot_num_users_tot, stat.avg_num_users_daily);
-    printf("Tasks: Done=%d, Not Done=%d\n", stat.tot_num_tasks_done, stat.tot_num_tasks_not_done);
-    printf("Wait Time: Daily=%.2f, Total=%.2f\n", stat.avg_time_users_wait_daily, stat.avg_time_users_wait_tot);
-    printf("Active Workers: %d, W/U Ratio: %.2f\n", stat.num_workers_active_daily, stat.num_ratio_worker_user);
+void print_stats(daily_stats shared_daily_stats, tot_stats *shared_tot_stats, int day){
+    printf("\n\n-----------------------DAY %d-----------------------\n\n", day);
+
 }
 
-void tasks_assignment(worker_seat *shared_seats, stats curr_stats, int *shared_macros) {
-    int task_failures[6] = {0};  // For 6 services
-    float failure_rates[6] = {0.0};
+void tasks_assignment(worker_seat *shared_seats, daily_stats shared_daily_stats, int *shared_macros) {
     
-    // Calculate failure rates for each service
-    for(int service = 0; service < 6; service++) {
-        int total_tasks = curr_stats.prev_stats_tot_tasks_done[service] + 
-                         curr_stats.prev_stats_tot_tasks_not_done[service];
-        
-        if (total_tasks > 0) {
-            failure_rates[service] = (float)curr_stats.prev_stats_tot_tasks_not_done[service] / total_tasks;
-            task_failures[service] = (int)(failure_rates[service] * 100);
-        }
-    }
-    
-    // Calculate total failures
-    int total_failures = 0;
-    for(int i = 0; i < 6; i++) {
-        total_failures += task_failures[i];
-    }
-    
-    // Reset all seats
-    for(int i = 0; i < shared_macros[1]; i++) {
-        shared_seats[i].busy = false;
-        shared_seats[i].task = 0;
-        shared_seats[i].worker_id = 0;
-    }
-    
-    // Distribute seats based on failure rates
-    int current_seat = 0;
-    if(total_failures > 0) {
-        for(int service = 0; service < 6; service++) {
-            int seats = (task_failures[service] * shared_macros[1]) / total_failures;
-            seats = (seats > 0 && failure_rates[service] > 0) ? seats : 1;
-            
-            for(int j = 0; j < seats && current_seat < shared_macros[1]; j++) {
-                shared_seats[current_seat].task = service;
-                current_seat++;
-            }
-        }
-    }
-    
-    // Distribute remaining seats evenly
-    while(current_seat < shared_macros[1]) {
-        for(int service = 0; service < 6 && current_seat < shared_macros[1]; service++) {
-            shared_seats[current_seat].task = service;
-            current_seat++;
-        }
-    }
 }
 
 int reset_ipc(int semid, int num_sem) {

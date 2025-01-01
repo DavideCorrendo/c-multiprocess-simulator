@@ -1,6 +1,13 @@
 Correndo Davide   1104824 davide.correndo@edu.unito.it
 Collura  Federico 1102786 federico.collura@edu.unito.it
 
+ftok keys:
+A = daily_stats 
+B = tot_stats
+C = seats
+D = macros 
+E = sem 
+F = msg
 
 messages queue:
 1 = start/end day
