@@ -1,27 +1,34 @@
 #include "main.h"
 
+void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
+
 int main() {
     struct message msg;
 
-    enum tasks task;
+    int task; //<------------------???-------------------->
 
-    int msgid = msgget(MSG_KEY, 0);
+    key_t shm_macros_key;
+    key_t sem_key;
+    key_t msg_key;
+
+    inizialize_keys_modified(&shm_macros_key, &sem_key, &msg_key);
+    int msgid = msgget(msg_key, 0);
     if(msgid == -1) {
         perror("msgget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
-    int shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * NUM_MACROS, 0);
+    int shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
     if(shmid_macros == -1) {
         perror("shmget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     int *shared_macros = shmat(shmid_macros, NULL, 0);
 
-    int semid = semget(SEM_KEY, shared_macros[1] + 5, 0);
+    int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
         perror("semget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // msg director and ticket = 3
@@ -39,4 +46,19 @@ int main() {
         break;
 
     }    
+}
+
+void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {
+    if((*shm_macros_key = ftok("/tmp", 'D')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*sem_key = ftok("/tmp", 'E')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*msg_key = ftok("/tmp", 'F')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
 }

@@ -17,7 +17,6 @@
 
 #define P_SERV_MIN 20 
 #define P_SERV_MAX 60
-//#define P_SERV (rand() % (P_SERV_MAX -  P_SERV_MIN + 1) + P_SERV_MIN)  <----------------------------DA VEDERE SE GIUSTO A CAUSA DELLA DIVERSITA CHE DEVE ESSERCI TRA LE VA RIE P_SERV
 
 #include <stdio.h>
 #include <stdlib.h>

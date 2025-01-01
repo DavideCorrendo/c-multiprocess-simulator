@@ -2,6 +2,7 @@
 
 void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats);
 void task_time(struct message msg, int msgid, int semid, int *shared_macros);
+void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
 
 int main() {
     struct message msg;
@@ -11,25 +12,36 @@ int main() {
     int task = rand() % 6;
 
     //initializzation
-    int msgid = msgget(MSG_KEY, 0);
 
-    int shmid_macros = shmget(SHM_KEY_MACROS, sizeof(int) * NUM_MACROS, 0);
+    key_t shm_seats_key;
+    key_t shm_macros_key;
+    key_t sem_key;
+    key_t msg_key;
+
+    inizialize_keys_modified(&shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
+    int msgid = msgget(msg_key, 0);
+    if(msgid == -1) {
+        perror("msgget");
+        exit(EXIT_FAILURE);
+    }
+
+    int shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
     if(shmid_macros == -1) {
         perror("shmget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     int *shared_macros = shmat(shmid_macros, NULL, 0);
 
-    int semid = semget(SEM_KEY, 3 * shared_macros[1] + 2, 0);
+    int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
         perror("semget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
-    int shmid_seats = shmget(SHM_KEY_SEATS, shared_macros[1] * sizeof(worker_seat), 0);
+    int shmid_seats = shmget(shm_seats_key, shared_macros[1] * sizeof(worker_seat), 0);
     if(shmid_seats == -1) {
         perror("shmget");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
 
@@ -79,6 +91,28 @@ void office_time(struct message msg, int task, int msgid, int semid, int *shared
 
 void task_time(struct message msg, int msgid, int semid, int *shared_macros) {
     wait_semaphore(semid, shared_macros[1]- 1);
+
     msg.mtype = 10;
-    //msgsnd();
+    msgsnd(msgid, &msg, sizeof(struct message), 0);
+
+    msgrcv(msgid, &msg, sizeof(struct message), 10, 0);
+}
+
+void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {
+    if((*shm_seats_key = ftok("/tmp", 'C')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*shm_macros_key = ftok("/tmp", 'D')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*sem_key = ftok("/tmp", 'E')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*msg_key = ftok("/tmp", 'F')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
 }
