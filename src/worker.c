@@ -48,9 +48,12 @@ void signal_handler(int signum) {
 
 int main(int argc, char *argv[]) {
 
+    if(argc != 2){
+        printf("too many arguments");
+        exit(EXIT_FAILURE);
+    }
+
     struct message msg;
-    const char *file_timeout = "config_timeout.conf";
-    int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
 
     int id_worker = atoi(argv[1]);
 
@@ -215,7 +218,7 @@ void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, 
     shared_tot_stats->num_task_not_done += num_task_not_done;
 
     shared_daily_stats[day].user_served_per_task[task] += user_served;
-    shared_daily_stats[day].user_not_served_per_task[task] ;
+    shared_daily_stats[day].user_not_served_per_task[task]++;
     shared_daily_stats[day].user_not_served_daily += user_served; 
     shared_daily_stats[day].avg_num_tasks_not_done_daily = num_task_not_done / shared_macros[0]; 
 

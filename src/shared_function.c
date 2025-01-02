@@ -16,6 +16,7 @@ int leggi_parametro(const char *file_path, const char *parametro) {
 
         // Cerca la chiave specificata
         char *key = strtok(line, "=");
+        printf("%s\n", key);
         char *value = strtok(NULL, "=");
         if (value != NULL) {
             char *endptr;
@@ -73,6 +74,7 @@ int initSem(int semid, int num_sems){
             exit(EXIT_FAILURE);
         }
     }
+    return 1;
 }
 
 

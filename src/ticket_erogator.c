@@ -41,8 +41,6 @@ int main() {
 
     struct message msg;
 
-    int task;
-
     key_t shm_macros_key;
     key_t shm_seats_key;
     key_t sem_key;
@@ -71,7 +69,7 @@ int main() {
     int shmid_seats = shmget(shm_seats_key, shared_macros[1] * sizeof(worker_seat), 0);
     shared_seats = shmat(shmid_seats, NULL, 0);
 
-    while(msg.mtext != "end_simulation"){
+    while(strcmp(msg.mtext, "end_simulation") != 0){
 
         msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
         

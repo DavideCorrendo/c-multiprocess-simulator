@@ -55,8 +55,8 @@ void handle_child_exit(int sig) {
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {
-            printf("Process %d terminated with status %d\n", 
-                   pid, WEXITSTATUS(status));
+            printf("Process %d terminated with signal %d status %d\n", 
+                   pid, sig, WEXITSTATUS(status));
         } else if (WIFSIGNALED(status)) {
             printf("Process %d killed by signal %d%s\n", 
                    pid, WTERMSIG(status),
@@ -69,11 +69,13 @@ void handle_child_exit(int sig) {
     }
     
     errno = saved_errno;  // Restore errno
+    cleanup();
+    exit(EXIT_FAILURE);
 }
 
 void handle_termination(int sig) {
     // Cleanup code here - implement based on your needs
-    printf("Received termination signal. Cleaning up...\n");
+    printf("Received termination signal %d. Cleaning up...\n", sig);
     
     cleanup();
     
@@ -107,6 +109,9 @@ int main(int argc, char **argv) {
 
     int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
     int explode_threshold = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
+
+    printf("%d\n", SIM_DURATION);
+    printf("%d\n", explode_threshold);
 
     int NOF_WORKERSEATS = atoi(argv[1]);
     int NOF_WORKERS = atoi(argv[2]);
@@ -300,14 +305,11 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 }
 
 void simulate_day(int *simulated_minutes) {
-    puts("inizio giorno");
     struct timespec start_time, current_time;
     unsigned long long elapsed_nanos = 0;
 
     // Record the starting time
     clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-    printf("Simulating a day with 1 simulated minute = %d nanoseconds of real time...\n", N_NANO_SEC);
 
     while (*simulated_minutes < 480) { // 480 minutes for 8h of work
         clock_gettime(CLOCK_MONOTONIC, &current_time);
@@ -317,7 +319,7 @@ void simulate_day(int *simulated_minutes) {
                         (current_time.tv_nsec - start_time.tv_nsec);
 
         // Check if a simulated minute has passed
-        if (elapsed_nanos >= N_NANO_SEC * (*simulated_minutes + 1)) {
+        if (elapsed_nanos >= N_NANO_SEC * ((unsigned long long)(*simulated_minutes) + 1)) {
             (*simulated_minutes)++;
             //printf("Simulated Time: %02d:%02d (HH:MM)\n", *simulated_minutes / 60, *simulated_minutes % 60);
         }
@@ -504,7 +506,8 @@ int reset_ipc(int semid, int num_sem) {
     } sem_union;
     
     // Reset all semaphores to 0
-    unsigned short values[num_sem];
+    unsigned short *values = malloc(num_sem * sizeof(unsigned short));
+
     for (int i = 0; i < num_sem; i++) {
         values[i] = 0;
     }
@@ -514,6 +517,7 @@ int reset_ipc(int semid, int num_sem) {
         return -1;
     }
     
+    free(values);
     return 0;
 }
 

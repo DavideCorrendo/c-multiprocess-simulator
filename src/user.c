@@ -4,7 +4,7 @@ static int *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
 void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day);
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, bool *end_day);
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
 void cleanup_resources();
 
@@ -124,11 +124,11 @@ void office_time(struct message msg, int task, int msgid, int semid, int *shared
     }
     int seat_num = msg.num;
 
-    task_time(msg, msgid, semid, shared_macros, task, shared_seats[seat_num].worker_id, end_day);
+    task_time(msg, msgid, semid, shared_macros, shared_seats[seat_num].worker_id, end_day);
 
 }
 
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day) {
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, bool *end_day) {
     int start_time = shared_macros[2];
     wait_semaphore(semid, shared_macros[1]- 1);
     msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 0, IPC_NOWAIT);
