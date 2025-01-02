@@ -1,14 +1,45 @@
 #include "main.h"
 
+static int *shared_macros = NULL;
+static worker_seat *shared_seats = NULL;
+
 void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
 void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day);
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
 void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
 
-int main() {
-    struct message msg;
+void signal_handler(int sig) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL; 
+    
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
+    
+    cleanup_resources(shared_macros, shared_seats);
+    
+    raise(sig);
+}
 
-    //initializzation
+int main() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction SIGINT");
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGTERM, &sa, NULL) == -1) {
+        perror("sigaction SIGTERM");
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGHUP, &sa, NULL) == -1) {
+        perror("sigaction SIGHUP");
+        exit(EXIT_FAILURE);
+    }
+    struct message msg;
 
     key_t shm_seats_key;
     key_t shm_macros_key;
@@ -27,7 +58,7 @@ int main() {
         perror("shmget");
         exit(EXIT_FAILURE);
     }
-    int *shared_macros = shmat(shmid_macros, NULL, 0);
+    shared_macros = shmat(shmid_macros, NULL, 0);
 
     int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
@@ -40,7 +71,7 @@ int main() {
         perror("shmget");
         exit(EXIT_FAILURE);
     }
-    worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
+    shared_seats = shmat(shmid_seats, NULL, 0);
 
     bool end_day;
 

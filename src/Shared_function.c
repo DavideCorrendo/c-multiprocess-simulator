@@ -119,11 +119,4 @@ int num_user_waiting(int semid, int *shared_macros) {
     return total_waiting;
 }
 
-void cleanup_resources(int *shared_macros, worker_seat *shared_seats) {
-    if (shared_macros != NULL) {
-        shmdt(shared_macros);
-    }
-    if (shared_seats != NULL) {
-        shmdt(shared_seats);
-    }
-}
+

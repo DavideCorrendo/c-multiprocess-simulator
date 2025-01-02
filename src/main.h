@@ -123,9 +123,9 @@ int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void get_function(int *, int *, int *, int *, int *, int *);
 void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
-void cleanup();
 int num_user_waiting(int semid, int *shared_macros);
 void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
+void signal_handler(int sig);
 
 
 #endif

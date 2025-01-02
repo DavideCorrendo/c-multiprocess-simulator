@@ -5,13 +5,38 @@ static worker_seat *shared_seats = NULL;
 
 void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key, key_t *msg_key, key_t *shm_seats_key);
 
-void signal_handler(int sig){
-
+void signal_handler(int sig) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL; 
+    
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
+    
     cleanup_resources(shared_macros, shared_seats);
-
+    
+    raise(sig);
 }
 
 int main() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction SIGINT");
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGTERM, &sa, NULL) == -1) {
+        perror("sigaction SIGTERM");
+        exit(EXIT_FAILURE);
+    }
+    if (sigaction(SIGHUP, &sa, NULL) == -1) {
+        perror("sigaction SIGHUP");
+        exit(EXIT_FAILURE);
+    }
+
     struct message msg;
 
     int task;
