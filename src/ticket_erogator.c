@@ -1,17 +1,27 @@
 #include "main.h"
 
-void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
+static int *shared_macros = NULL;
+static worker_seat *shared_seats = NULL;
+
+void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key, key_t *msg_key, key_t *shm_seats_key);
+
+void signal_handler(int sig){
+
+    cleanup_resources(shared_macros, shared_seats);
+
+}
 
 int main() {
     struct message msg;
 
-    int task; //<------------------???-------------------->
+    int task;
 
     key_t shm_macros_key;
+    key_t shm_seats_key;
     key_t sem_key;
     key_t msg_key;
 
-    inizialize_keys_modified(&shm_macros_key, &sem_key, &msg_key);
+    inizialize_keys_modified(&shm_macros_key, &sem_key, &msg_key, &shm_seats_key);
     int msgid = msgget(msg_key, 0);
     if(msgid == -1) {
         perror("msgget");
@@ -23,7 +33,7 @@ int main() {
         perror("shmget");
         exit(EXIT_FAILURE);
     }
-    int *shared_macros = shmat(shmid_macros, NULL, 0);
+    shared_macros = shmat(shmid_macros, NULL, 0);
 
     int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
@@ -31,24 +41,43 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // msg director and ticket = 3
-    // msg ticket and utente = 4
+    int shmid_seats = shmget(shm_seats_key, shared_macros[1] * sizeof(worker_seat), 0);
+    shared_seats = shmat(shmid_seats, NULL, 0);
 
-    while(msg.mtext != "end"){
+    while(msg.mtext != "end_simulation"){
 
         msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
-        char req[MAX_MSG_SIZE] = msg.mtext;
+        
+        msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
+        msgsnd(msgid, &msg, sizeof(struct message), 4);
 
-        msgsnd(msgid, &msg, sizeof(struct message), 0);
+        msgrcv(msgid, &msg, sizeof(struct message), 5, IPC_NOWAIT);
 
-        msgrcv(msgid, &msg, sizeof(struct message), 3, IPC_NOWAIT);
+    }
 
-        break;
+    cleanup_resources(shared_macros, shared_seats);
+    return EXIT_SUCCESS;
 
-    }    
 }
 
-void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {
+int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid){
+
+    int index_min;
+    int min = INT_MAX;
+
+    for(int i = 0; i < shared_macros[1]; i++){
+        if(shared_seats[i].task == task){
+            int num = num_user_waiting(semid, shared_macros);
+            if(min > num){
+                index_min = i;
+                min = num;
+            }
+        }
+    }
+    return index_min;
+}
+
+void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key) {
     if((*shm_macros_key = ftok("/tmp", 'D')) == -1){
         perror("ftok: ");
         exit(EXIT_FAILURE);
@@ -58,6 +87,10 @@ void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_
         exit(EXIT_FAILURE);
     }
     if((*msg_key = ftok("/tmp", 'F')) == -1){
+        perror("ftok: ");
+        exit(EXIT_FAILURE);
+    }
+    if((*shm_seats_key = ftok("/tmp", 'C')) == -1){
         perror("ftok: ");
         exit(EXIT_FAILURE);
     }

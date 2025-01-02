@@ -103,3 +103,27 @@ void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *
     }
 
 }
+
+int num_user_waiting(int semid, int *shared_macros) {
+    int total_waiting = 0;
+    
+    // Check only worker seat semaphores
+    for (int i = 0; i < shared_macros[1]; i++) {
+        // Get number of processes waiting for zero on this semaphore
+        int waiting = semctl(semid, i, GETZCNT, arg);
+        if (waiting != -1) {
+            total_waiting += waiting;
+        }
+    }
+
+    return total_waiting;
+}
+
+void cleanup_resources(int *shared_macros, worker_seat *shared_seats) {
+    if (shared_macros != NULL) {
+        shmdt(shared_macros);
+    }
+    if (shared_seats != NULL) {
+        shmdt(shared_seats);
+    }
+}

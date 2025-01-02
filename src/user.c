@@ -1,8 +1,9 @@
 #include "main.h"
 
-void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats);
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task);
+void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day);
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
+void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
 
 int main() {
     struct message msg;
@@ -41,65 +42,68 @@ int main() {
     }
     worker_seat *shared_seats = shmat(shmid_seats, NULL, 0);
 
+    bool end_day;
+
     //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
 
-    while(msg.mtext != "end") {
-        for(int i = 0; i < shared_macros[3]; i++) {
-            int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;
+        for(int i = 0; i < shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
+            int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;//probabilty to go to the office
 
             int decision = rand() % 101;
+            int num_task = (rand() % 5) + 1;
+            int time = rand() % 480;
+            end_day = false;
 
-            if(decision <= P_SERV) {
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+            usleep(time * N_NANO_SEC);
+
+            while(decision <= P_SERV && num_task != 0 && !end_day){
                 //<----------------TIME DECISION---------------------------->
-                int P_MULTI_TASK = rand() % 6;      //multi_task probability
+                int task = rand() % 6;
 
-                for(int j = 0; j < 480; j++) {      //60 * 8 = minutes for hour => time of daily work
-                    if(decision >= 40) {
-                        // chose a random tasks
-                        srand(time(NULL));
-                        int task = rand() % 6;
+                office_time(msg, task, msgid, semid, shared_macros, shared_seats, &end_day);
+                if(end_day)break;
 
-                        //go to the postal office
-                        usleep(100);
-
-                        office_time(msg, task, msgid, semid, shared_macros, shared_seats);
-                    }
-                    decision += 2;
-                }
+                num_task--;
             }
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, IPC_NOWAIT);
         }
-    }
     
+    cleanup_resources(shared_macros, shared_seats);
     return 1;
 }
-void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats) {
+void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day) {
     msg.mtype = 4;
-    msgsnd(msgid, &msg, sizeof(struct message), 0);
-    msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
+    msg.num = task;
+    wait_semaphore(semid, shared_macros[1] + 2);
+    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
+    signal_semaphore(semid, shared_macros[1] + 2);
     if(msg.num == -1) {
         return;
     }
-
     int seat_num = msg.num;
-    signal_semaphore(semid, shared_macros[1] + 1);
 
-    //<--------------------RESEARCH OF THE CORRECT SEAT, WAIT IN SEM-QUEUE, AND REQUEST THE TASK----------------------->
-    for(int i = 0; i < shared_macros[1]; i++) {
-        if(seat_num == shared_seats[i].worker_id) {
-            task_time(msg, msgid, semid, shared_macros, task);
-        }
-    }
+    task_time(msg, msgid, semid, shared_macros, task, shared_seats[seat_num].worker_id, end_day);
+
 }
 
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task) {
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day) {
+    int start_time = shared_macros[2];
     wait_semaphore(semid, shared_macros[1]- 1);
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 0, IPC_NOWAIT);
+    if(strcmp(msg.mtext, "end") == 0){
+        *end_day = true;
+        signal_semaphore(semid, shared_macros[1]- 1);
+        return;
+    }
 
-    msg.mtype = 10;
-    msgsnd(msgid, &msg, sizeof(struct message), 0);
+    msg.mtype = 5 + worker_id;
+    msg.num = shared_macros[2] - start_time;
+    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long),  5 + worker_id, 0);
 
-    msgrcv(msgid, &msg, sizeof(struct message), 10, 0);
-
-    task = 10;
+    signal_semaphore(semid, shared_macros[1]- 1);
 }
 
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {

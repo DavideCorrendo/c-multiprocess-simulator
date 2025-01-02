@@ -245,21 +245,6 @@ float ratio_worker_seats(int *shared_macros, worker_seat *shared_seats, int inde
     return worker_per_task(shared_macros, shared_seats, shared_seats[index].task) / num_workerseats_per_task;
 }
 
-int num_user_waiting(int semid, int *shared_macros) {
-    int total_waiting = 0;
-    
-    // Check only worker seat semaphores
-    for (int i = 0; i < shared_macros[1]; i++) {
-        // Get number of processes waiting for zero on this semaphore
-        int waiting = semctl(semid, i, GETZCNT, arg);
-        if (waiting != -1) {
-            total_waiting += waiting;
-        }
-    }
-
-    return total_waiting;
-}
-
 int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task){
     int cont = 0;
     for(int i = 0; i < shared_macros[0]; i++){

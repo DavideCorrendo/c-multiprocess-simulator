@@ -31,13 +31,14 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <limits.h>
 
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC 1 
 #endif
 
 typedef struct worker_seat{
-    size_t id;
+    int id;
     int task;
     bool busy;
     int worker_id;
@@ -123,6 +124,8 @@ int get_semaphore_value(int semid, int sem_num);
 void get_function(int *, int *, int *, int *, int *, int *);
 void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
 void cleanup();
+int num_user_waiting(int semid, int *shared_macros);
+void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
 
 
 #endif
