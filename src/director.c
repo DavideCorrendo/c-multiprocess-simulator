@@ -1,5 +1,14 @@
 #include "main.h"
 
+void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid_seats, int *shmid_macros, 
+                       int SIM_DURATION, int NOF_WORKERSEATS, daily_stats **shared_daily_stats, 
+                       tot_stats **shared_tot_stats, worker_seat **shared_seats, int **shared_macros, 
+                       int *msgid, int *semid);
+void simulate_day(int *simulated_minutes);
+void print_stats(int day);
+void tasks_assignment(int day);
+int reset_ipc(int semid, int num_sem);
+
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
 static int shmid_seats = -1;
@@ -88,6 +97,11 @@ int main(int argc, char **argv) {
     validate_inputs(argc, argv);
     setup_signal_handlers();     
 
+    if(argc != 5){
+        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
     const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
 
@@ -108,6 +122,8 @@ int main(int argc, char **argv) {
     tot_stats *shared_tot_stats;
     worker_seat *shared_seats;
     int *shared_macros;
+
+    puts("program started");
 
     int msgid;
     int semid;
@@ -140,12 +156,16 @@ int main(int argc, char **argv) {
     struct message msg;
     memset(&msg, 0, sizeof(struct message));
 
+    puts("initializzazion finished");
+
     pid_t pid = fork();
     if (pid == 0) {
-        execv("./ticket_erogator", (char*[]){ "ticket_erogator", NULL });
+        execv("./bin/ticket_erogator", (char*[]){ "bin/ticket_erogator", NULL });
         perror("execv ticket_erogator failed");
         exit(EXIT_FAILURE);
     }
+
+    puts("ticket erogator opened");
 
     msg.mtype = 2;
     for(int i = 0; i < NOF_WORKERS; i++) {
@@ -153,24 +173,29 @@ int main(int argc, char **argv) {
         if (pid == 0) {
             char worker_id_str[32];
             snprintf(worker_id_str, sizeof(worker_id_str), "%d", i + 1); 
-            execv("./worker", (char*[]){ "worker", worker_id_str, NULL });
+            execv("./bin/worker", (char*[]){ "bin/worker", worker_id_str, NULL });
             perror("execv worker failed");
             exit(EXIT_FAILURE);
         }
     }
 
+    
+    puts("worker opened");
+    
+
     for(int i = 0; i < NOF_USERS; i++) {
         pid = fork();
         if (pid == 0) {
-            execv("./user", (char*[]){ "user", NULL });
+            execv("./bin/user", (char*[]){ "bin/user", NULL });
             perror("execv user failed");
             exit(EXIT_FAILURE);
         }
     }
 
+    puts("user_opened");
+
     for(int i = 1; i <= SIM_DURATION; i++){
         initSem(semid, 5 + NOF_WORKERSEATS);
-        shared_macros[6] = 0;
         tasks_assignment(i); 
         msg.mtype = 1;
         strcpy(msg.mtext, "start");
@@ -182,7 +207,7 @@ int main(int argc, char **argv) {
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        usleep(1000);
+    
         print_stats(i);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
@@ -266,7 +291,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
         exit(EXIT_FAILURE);
     }
 
-    *semid = semget(sem_key, 100, 0);
+    *semid = semget(sem_key, 100, IPC_CREAT | 0666);
     if(*semid == -1) {
         perror("semget");
         exit(1);
@@ -275,6 +300,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 }
 
 void simulate_day(int *simulated_minutes) {
+    puts("inizio giorno");
     struct timespec start_time, current_time;
     unsigned long long elapsed_nanos = 0;
 
@@ -297,7 +323,7 @@ void simulate_day(int *simulated_minutes) {
         }
 
         // Sleep for a short while to reduce CPU usage
-        //usleep(100);
+        usleep(100);
     }
 
     printf("Simulation complete: A full day has passed in simulated time.\n");
@@ -339,6 +365,81 @@ void print_stats(int day){
         printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
     }
 
+    FILE *fp;
+    fp = fopen("stats.csv", "a");
+    if (fp == NULL) {
+        perror("Error opening stats.csv");
+        return;
+    }
+
+    fprintf(fp, "Timestamp,Day,Total Users Served,Avg Users Per Worker,Total Services Done,Total Services Not Done,"
+                "Avg Services Done,Avg Services Not Done,Total Avg Wait Time,Daily Avg Wait Time,"
+                "Total Avg Service Time,Daily Avg Service Time");
+        
+    for (int i = 0; i < 6; i++) {
+        fprintf(fp, ",Service %d Users,Service %d Avg Users Per Worker,Service %d Tasks Done,"
+            "Service %d Tasks Not Done,Service %d Avg Tasks Done,Service %d Avg Tasks Not Done,"
+            "Service %d Avg Wait Time,Service %d Daily Wait Time,"
+            "Service %d Avg Service Time,Service %d Daily Service Time",
+            i, i, i, i, i, i, i, i, i, i);
+    }
+
+    fprintf(fp, ",Active Users Simulation,Active Users Daily,Avg Daily Pauses,Total Pauses");
+        
+        for (int i = 0; i < shared_macros[1]; i++) {
+            fprintf(fp, ",Worker-Seat Ratio %d", i);
+        }
+        fprintf(fp, "\n");
+
+    time_t now;
+    char timestamp[26];
+    time(&now);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+
+    // Write data row
+    fprintf(fp, "%s,%d,%d,%.2f,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+            timestamp,
+            day,
+            shared_tot_stats->num_user_served,
+            shared_daily_stats[day].avg_num_users_daily,
+            shared_tot_stats->num_task_done,
+            shared_tot_stats->num_task_not_done,
+            shared_daily_stats[day].avg_num_tasks_done_daily,
+            shared_daily_stats[day].avg_num_tasks_not_done_daily,
+            shared_tot_stats->avg_time_wait,
+            shared_daily_stats[day].avg_time_users_wait_daily,
+            shared_tot_stats->avg_time_task,
+            shared_daily_stats[day].avg_time_tasks_done_daily);
+
+    // Write per-service stats
+    for (int i = 0; i < 6; i++) {
+        fprintf(fp, ",%d,%.2f,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+                shared_tot_stats->num_user_served_per_task[i],
+                shared_daily_stats[day].avg_num_users_daily_per_task[i],
+                shared_tot_stats->num_task_done_per_task[i],
+                shared_tot_stats->num_task_not_done_per_task[i],
+                shared_daily_stats[day].avg_num_tasks_done_daily_per_task[i],
+                shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[i],
+                shared_tot_stats->avg_time_wait_per_task[i],
+                shared_daily_stats[day].avg_time_users_wait_daily_per_task[i],
+                shared_tot_stats->avg_time_task_per_task[i],
+                shared_daily_stats[day].avg_time_tasks_done_daily_per_task[i]);
+    }
+
+    // Write worker stats
+    fprintf(fp, ",%d,%d,%.2f,%d",
+            shared_daily_stats[day].num_workers_active_daily,
+            shared_tot_stats->num_worker_active,
+            shared_daily_stats[day].avg_num_pause_daily,
+            shared_tot_stats->num_pause);
+
+    // Write worker-seat ratios
+    for (int i = 0; i < shared_macros[1]; i++) {
+        fprintf(fp, ",%.2f", shared_daily_stats[day].num_ratio_worker_user[i]);
+    }
+    fprintf(fp, "\n");
+
+    fclose(fp);
 }
 
 void tasks_assignment(int day) {

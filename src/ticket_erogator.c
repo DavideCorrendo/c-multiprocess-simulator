@@ -4,6 +4,8 @@ static int *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
 void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key, key_t *msg_key, key_t *shm_seats_key);
+void cleanup_resources();
+int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -14,7 +16,7 @@ void signal_handler(int sig) {
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
     
-    cleanup_resources(shared_macros, shared_seats);
+    cleanup_resources();
     
     raise(sig);
 }
@@ -119,4 +121,17 @@ void inizialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_
         perror("ftok: ");
         exit(EXIT_FAILURE);
     }
+}
+
+void cleanup_resources() {
+    if (shared_seats != NULL) {
+        shmdt(shared_seats);
+        shared_seats = NULL;
+    }
+    if (shared_macros != NULL) {
+        shmdt(shared_macros);
+        shared_macros = NULL;
+    }
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
 }

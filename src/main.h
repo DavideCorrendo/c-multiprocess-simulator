@@ -71,7 +71,7 @@ typedef struct daily_stats{
     int num_pause_daily;
 
     int num_workers_active_daily;
-    int avg_num_pause_daily;
+    float avg_num_pause_daily;
     float num_ratio_worker_user[100];
 
 }daily_stats;
@@ -108,11 +108,11 @@ struct message {
     int num;
 };
 
-union semun {
+extern union semun {
     int val;
     struct semid_ds *buf;
     unsigned short *array;
-}arg;
+} arg;
 
 
 int leggi_parametro(const char *, const char *);
@@ -124,8 +124,10 @@ int get_semaphore_value(int semid, int sem_num);
 void get_function(int *, int *, int *, int *, int *, int *);
 void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
 int num_user_waiting(int semid, int *shared_macros);
-void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
 void signal_handler(int sig);
+void handle_child_exit(int sig);
+void handle_termination(int sig);
+void cleanup(void);
 
 
 #endif

@@ -3,10 +3,10 @@
 static int *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
-void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
+void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
 void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task, int worker_id, bool *end_day);
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
-void cleanup_resources(int *shared_macros, worker_seat *shared_seats);
+void cleanup_resources();
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -59,6 +59,10 @@ int main() {
         exit(EXIT_FAILURE);
     }
     shared_macros = shmat(shmid_macros, NULL, 0);
+    if (shared_macros == (void *)-1) {
+        perror("shmat failed for macros");
+        exit(EXIT_FAILURE);
+    }
 
     int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
@@ -72,6 +76,11 @@ int main() {
         exit(EXIT_FAILURE);
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
+    if (shared_seats == (void *)-1) {
+        perror("shmat failed for seats");
+        exit(EXIT_FAILURE);
+    }
+
 
     bool end_day;
 
@@ -154,4 +163,17 @@ void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t 
         perror("ftok: ");
         exit(EXIT_FAILURE);
     }
+}
+
+void cleanup_resources() {
+    if (shared_seats != NULL) {
+        shmdt(shared_seats);
+        shared_seats = NULL;
+    }
+    if (shared_macros != NULL) {
+        shmdt(shared_macros);
+        shared_macros = NULL;
+    }
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
 }

@@ -1,5 +1,7 @@
 #include "main.h"
 
+union semun arg;
+
 int leggi_parametro(const char *file_path, const char *parametro) {
     FILE *file = fopen(file_path, "r");
     if (file == NULL) {
@@ -55,7 +57,6 @@ int signal_semaphore(int semid, int sem_num) {
 
 // Initialize a specific semaphore in the set
 int init_semaphore(int semid, int sem_num, int value) {
-    union semun arg;
     arg.val = value;
     return semctl(semid, sem_num, SETVAL, arg);
 }
@@ -107,9 +108,7 @@ void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *
 int num_user_waiting(int semid, int *shared_macros) {
     int total_waiting = 0;
     
-    // Check only worker seat semaphores
     for (int i = 0; i < shared_macros[1]; i++) {
-        // Get number of processes waiting for zero on this semaphore
         int waiting = semctl(semid, i, GETZCNT, arg);
         if (waiting != -1) {
             total_waiting += waiting;

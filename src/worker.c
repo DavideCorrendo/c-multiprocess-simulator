@@ -1,5 +1,11 @@
 #include "main.h"
 
+bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid);
+void working_time(worker_seat *shared_seats, daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int *shared_macros, int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
+void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int task_time, bool pause, int wait_time);
+int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task);
+float ratio_worker_seats(int *shared_macros, worker_seat *shared_seats, int index);
+
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
 static int shmid_seats = -1;
@@ -70,28 +76,28 @@ int main(int argc, char *argv[]) {
     shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
     shared_macros = shmat(shmid_macros, NULL, 0);
     if (shared_macros == (void *)-1) {
-        perror("shmat failed for macros");
+        perror("shmat failed for macros in worker");
         exit(EXIT_FAILURE);
     }
 
     shmid_daily_stats = shmget(shm_daily_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
     shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
     if (shared_daily_stats == (void *)-1) {
-        perror("shmat failed for stats");
+        perror("shmat failed for stats in worker");
         exit(EXIT_FAILURE);
     }
 
-    shmid_tot_stats = shmget(shm_tot_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
+    shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
     shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
     if (shared_tot_stats == (void *)-1) {
-        perror("shmat failed for stats");
+        perror("shmat failed for stats in worker");
         exit(EXIT_FAILURE);
     }
 
     shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
     shared_seats = shmat(shmid_seats, NULL, 0);
     if (shared_seats == (void *)-1) {
-        perror("shmat failed for seats");
+        perror("shmat failed for seats in workerg");
         exit(EXIT_FAILURE);
     }
 
