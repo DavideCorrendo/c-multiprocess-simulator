@@ -15,10 +15,14 @@ int leggi_parametro(const char *file_path, const char *parametro) {
         // Cerca la chiave specificata
         char *key = strtok(line, "=");
         char *value = strtok(NULL, "=");
-
-        if (key != NULL && value != NULL && strcmp(key, parametro) == 0) {
-            fclose(file);
-            return atoi(value); // Ritorna il valore come intero
+        if (value != NULL) {
+            char *endptr;
+            long val = strtol(value, &endptr, 10);
+            if (*endptr != '\0') {
+                fprintf(stderr, "Invalid integer value for parameter '%s'\n", parametro);
+                exit(EXIT_FAILURE);
+            }
+        return (int)val;
         }
     }
 
@@ -99,4 +103,3 @@ void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *
     }
 
 }
-

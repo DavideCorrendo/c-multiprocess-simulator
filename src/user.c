@@ -1,15 +1,11 @@
 #include "main.h"
 
 void office_time(struct message msg, enum tasks task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats);
-void task_time(struct message msg, int msgid, int semid, int *shared_macros);
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task);
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
 
 int main() {
     struct message msg;
-
-    // chose a random task
-    srand(time(NULL));
-    int task = rand() % 6;
 
     //initializzation
 
@@ -55,14 +51,20 @@ int main() {
 
             if(decision <= P_SERV) {
                 //<----------------TIME DECISION---------------------------->
+                int P_MULTI_TASK = rand() % 6;      //multi_task probability
+
                 for(int j = 0; j < 480; j++) {      //60 * 8 = minutes for hour => time of daily work
                     if(decision >= 40) {
+                        // chose a random tasks
+                        srand(time(NULL));
+                        int task = rand() % 6;
+
                         //go to the postal office
                         usleep(100);
 
                         office_time(msg, task, msgid, semid, shared_macros, shared_seats);
                     }
-                    decision++;
+                    decision += 2;
                 }
             }
         }
@@ -84,18 +86,20 @@ void office_time(struct message msg, int task, int msgid, int semid, int *shared
     //<--------------------RESEARCH OF THE CORRECT SEAT, WAIT IN SEM-QUEUE, AND REQUEST THE TASK----------------------->
     for(int i = 0; i < shared_macros[1]; i++) {
         if(seat_num == shared_seats[i].worker_id) {
-            task_time(msg, msgid, semid, shared_macros);
+            task_time(msg, msgid, semid, shared_macros, task);
         }
     }
 }
 
-void task_time(struct message msg, int msgid, int semid, int *shared_macros) {
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int task) {
     wait_semaphore(semid, shared_macros[1]- 1);
 
     msg.mtype = 10;
     msgsnd(msgid, &msg, sizeof(struct message), 0);
 
     msgrcv(msgid, &msg, sizeof(struct message), 10, 0);
+
+    task = 10;
 }
 
 void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {

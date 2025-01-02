@@ -88,6 +88,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
     shared_seats = shmat(shmid_seats, NULL, 0);
     if (shared_seats == (void *)-1) {
         perror("shmat failed for seats");
@@ -101,7 +102,7 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i <= shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
 
         while (!find_seat(shared_seats, shared_macros, task, id_worker, semid)) {
-            msgrcv(msgid, &msg, sizeof(struct message), 1, IPC_NOWAIT);
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, IPC_NOWAIT);
             if(strcmp(msg.mtext, "end") == 0)continue;
             usleep(500);
         }
@@ -146,7 +147,7 @@ void working_time(worker_seat *shared_seats, daily_stats *shared_daily_stats, to
         msgrcv(msgid, msg, sizeof(struct message), 1, IPC_NOWAIT);
     }
 
-    usleep(1500);
+    usleep(500);
     wait_semaphore(semid, shared_macros[1]);
     update_stats(shared_daily_stats, shared_tot_stats, semid, day, shared_macros, task, shared_seats, user_served, time_task_count, pause, wait_time);
     signal_semaphore(semid, shared_macros[1]);
@@ -156,14 +157,12 @@ bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_w
     for (int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i);
         if (shared_seats[i].task == task && !shared_seats[i].busy) {
-            wait_semaphore(semid, i);
             if (!shared_seats[i].busy) {
                 shared_seats[i].busy = true;
                 shared_seats[i].worker_id = id_worker;
                 signal_semaphore(semid, i);
                 return true;
             }
-            signal_semaphore(semid, i);
         }
         signal_semaphore(semid, i);
     }
@@ -209,6 +208,8 @@ void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, 
 
     shared_tot_stats->num_task_not_done += num_task_not_done;
 
+    shared_daily_stats[day].user_served_per_task[task] += user_served;
+    shared_daily_stats[day].user_not_served_per_task[task] ;
     shared_daily_stats[day].user_not_served_daily += user_served; 
     shared_daily_stats[day].avg_num_tasks_not_done_daily = num_task_not_done / shared_macros[0]; 
 
@@ -218,9 +219,13 @@ void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, 
     shared_daily_stats[day].avg_time_users_wait_daily_per_task[task] = shared_daily_stats[day].time_wait_daily_per_task[task] / num;
     shared_daily_stats[day].avg_time_tasks_done_daily_per_task[task] += shared_daily_stats[day].time_task_daily_per_task[task] / num;
 
-    if(pause == true)shared_daily_stats[day].num_pause_daily++;
+    if(pause == true){
+        shared_daily_stats[day].num_pause_daily++;
+        shared_tot_stats->num_pause++;
+    }
 
     shared_daily_stats[day].num_workers_active_daily++;
+    shared_tot_stats->num_worker_active++;
     shared_daily_stats[day].avg_num_pause_daily = shared_daily_stats[day].num_pause_daily / num;
 
     for(int i = 0; i < shared_macros[1]; i++){

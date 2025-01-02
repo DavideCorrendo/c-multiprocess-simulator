@@ -1,21 +1,74 @@
 #include "main.h"
 
+static int shmid_daily_stats = -1;
+static int shmid_tot_stats = -1;
+static int shmid_seats = -1;
+static int shmid_macros = -1;
+static int msgid = -1;
+static int semid = -1;
+static daily_stats *shared_daily_stats = NULL;
+static tot_stats *shared_tot_stats = NULL;
+static worker_seat *shared_seats = NULL;
+static int *shared_macros = NULL;
+
+void setup_signal_handlers() {
+    struct sigaction sa;
+    
+    // SIGCHLD handler
+    sa.sa_handler = handle_child_exit;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction SIGCHLD failed");
+        exit(EXIT_FAILURE);
+    }
+    
+    // SIGTERM handler
+    sa.sa_handler = handle_termination;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGTERM, &sa, NULL) == -1) {
+        perror("sigaction SIGTERM failed");
+        exit(EXIT_FAILURE);
+    }
+    
+    // SIGINT handler
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction SIGINT failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void handle_child_exit(int sig) {
     int status;
     pid_t pid;
+    int saved_errno = errno;  // Save errno
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {
-            printf("Process %d terminated with status: ", pid);
-            if (WEXITSTATUS(status) == EXIT_SUCCESS) {
-                printf("SUCCESS\n");
-            } else {
-                printf("FAILURE (code %d)\n", WEXITSTATUS(status));
-            }
+            printf("Process %d terminated with status %d\n", 
+                   pid, WEXITSTATUS(status));
         } else if (WIFSIGNALED(status)) {
-            printf("Process %d killed by signal %d\n", pid, WTERMSIG(status));
+            printf("Process %d killed by signal %d%s\n", 
+                   pid, WTERMSIG(status),
+                   WCOREDUMP(status) ? " (core dumped)" : "");
         }
     }
+    
+    if (pid == -1 && errno != ECHILD) {
+        perror("waitpid failed");
+    }
+    
+    errno = saved_errno;  // Restore errno
+}
+
+void handle_termination(int sig) {
+    // Cleanup code here - implement based on your needs
+    printf("Received termination signal. Cleaning up...\n");
+    
+    cleanup();
+    
+    exit(EXIT_SUCCESS);
 }
 
 void validate_inputs(int argc, char **argv) {
@@ -33,16 +86,7 @@ void validate_inputs(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     validate_inputs(argc, argv);
-
-    struct sigaction sa;
-    sa.sa_handler = handle_child_exit;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-    
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction failed");
-        exit(EXIT_FAILURE);
-    }
+    setup_signal_handlers();     
 
     const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
@@ -85,6 +129,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    memset(shared_tot_stats, 0, sizeof(tot_stats));
+
     shared_macros[0] = NOF_WORKERS;
     shared_macros[1] = NOF_WORKERSEATS;
     shared_macros[2] = 0;
@@ -125,7 +171,7 @@ int main(int argc, char **argv) {
     for(int i = 1; i <= SIM_DURATION; i++){
         initSem(semid, 5 + NOF_WORKERSEATS);
         shared_macros[6] = 0;
-        tasks_assignment(shared_seats, shared_daily_stats[i], shared_macros); 
+        tasks_assignment(i); 
         msg.mtype = 1;
         strcpy(msg.mtext, "start");
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
@@ -136,7 +182,8 @@ int main(int argc, char **argv) {
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        print_stats(shared_daily_stats[i], shared_tot_stats, i);     
+        usleep(1000);
+        print_stats(i);     
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
@@ -144,18 +191,7 @@ int main(int argc, char **argv) {
     msg.mtype = 5;
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
 
-    shmdt(shared_macros); 
-    shmdt(shared_daily_stats);
-    shmdt(shared_tot_stats); 
-    shmdt(shared_seats);
-    
-    shmctl(shmid_macros, IPC_RMID, NULL);
-    shmctl(shmid_daily_stats, IPC_RMID, NULL);
-    shmctl(shmid_tot_stats, IPC_RMID, NULL);
-    shmctl(shmid_seats, IPC_RMID, NULL);
-
-    msgctl(msgid, IPC_RMID, NULL);
-    semctl(semid, 0, IPC_RMID);
+    cleanup();
 
     printf("Simulation completed successfully\n");
     return EXIT_SUCCESS;
@@ -231,7 +267,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
     }
 
     *semid = semget(sem_key, 100, 0);
-    if(semid == -1) {
+    if(*semid == -1) {
         perror("semget");
         exit(1);
     }
@@ -267,13 +303,96 @@ void simulate_day(int *simulated_minutes) {
     printf("Simulation complete: A full day has passed in simulated time.\n");
 }
 
-void print_stats(daily_stats shared_daily_stats, tot_stats *shared_tot_stats, int day){
+void print_stats(int day){
     printf("\n\n-----------------------DAY %d-----------------------\n\n", day);
+    printf("total number of user served: %d\n", shared_tot_stats->num_user_served);
+    printf("average number of users served per worker: %.2f\n", shared_daily_stats[day].avg_num_users_daily);
+    printf("total number of services done: %d\n", shared_tot_stats->num_task_done);
+    printf("total number of services not done: %d\n", shared_tot_stats->num_task_not_done);
+    printf("average number of services done: %.2f\n", shared_daily_stats[day].avg_num_tasks_done_daily);
+    printf("average number of services not done: %.2f\n", shared_daily_stats[day].avg_num_tasks_not_done_daily);
+    printf("total average waiting time: %.2f\n", shared_tot_stats->avg_time_wait);
+    printf("daily average waiting time: %.2f\n", shared_daily_stats[day].avg_time_users_wait_daily);
+    printf("total average service time: %.2f\n", shared_tot_stats->avg_time_task);
+    printf("daily average service time: %.2f\n\n", shared_daily_stats[day].avg_time_tasks_done_daily);
+
+    for(int i = 0; i < 6; i++){
+        printf("service %d\n", i);
+        printf("total number of user served per service: %d\n", shared_tot_stats->num_user_served_per_task[i]);
+        printf("average number of users served per worker per service: %.2f\n", shared_daily_stats[day].avg_num_users_daily_per_task[i]);
+        printf("total number of services done per service: %d\n", shared_tot_stats->num_task_done_per_task[i]);
+        printf("total number of services not done per service: %d\n", shared_tot_stats->num_task_not_done_per_task[i]);
+        printf("average number of services done per service: %.2f\n", shared_daily_stats[day].avg_num_tasks_done_daily_per_task[i]);
+        printf("average number of services not done per service: %.2f\n", shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[i]);
+        printf("total average waiting time per service: %.2f\n", shared_tot_stats->avg_time_wait_per_task[i]);
+        printf("daily average waiting time per service: %.2f\n", shared_daily_stats[day].avg_time_users_wait_daily_per_task[i]);
+        printf("total average service time per service: %.2f\n", shared_tot_stats->avg_time_task_per_task[i]);
+        printf("daily average service time per service: %.2f\n\n", shared_daily_stats[day].avg_time_tasks_done_daily_per_task[i]);
+    }
+
+    printf("number of users active sor the simulation: %d\n", shared_daily_stats[day].num_workers_active_daily);;
+    printf("number of users active daily: %d\n", shared_tot_stats->num_worker_active);
+    printf("average number of pause daily: %.2f\n", shared_daily_stats[day].avg_num_pause_daily);
+    printf("number of pause during simulation: %d\n", shared_tot_stats->num_pause);
+    
+    for(int i = 0; i < shared_macros[1]; i++){
+        printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
+    }
 
 }
 
-void tasks_assignment(worker_seat *shared_seats, daily_stats shared_daily_stats, int *shared_macros) {
-    
+void tasks_assignment(int day) {
+    int num = 0;
+    float proportions[6] = {0}; // Array to store task proportions
+
+    if(day > 0){
+        num = shared_daily_stats[day - 1].user_served_daily + shared_daily_stats[day - 1].user_not_served_daily;
+        float num1 = shared_daily_stats[day - 1].user_served_per_task[0] + shared_daily_stats[day - 1].user_not_served_per_task[0];
+        float num2 = shared_daily_stats[day - 1].user_served_per_task[1] + shared_daily_stats[day - 1].user_not_served_per_task[1];
+        float num3 = shared_daily_stats[day - 1].user_served_per_task[2] + shared_daily_stats[day - 1].user_not_served_per_task[2];
+        float num4 = shared_daily_stats[day - 1].user_served_per_task[3] + shared_daily_stats[day - 1].user_not_served_per_task[3];
+        float num5 = shared_daily_stats[day - 1].user_served_per_task[4] + shared_daily_stats[day - 1].user_not_served_per_task[4];
+        float num6 = shared_daily_stats[day - 1].user_served_per_task[5] + shared_daily_stats[day - 1].user_not_served_per_task[5];
+
+        if(num != 0) {
+            // Calculate proportions for each task type
+            proportions[0] = num1 / num;
+            proportions[1] = num2 / num;
+            proportions[2] = num3 / num;
+            proportions[3] = num4 / num;
+            proportions[4] = num5 / num;
+            proportions[5] = num6 / num;
+
+            // Calculate cumulative proportions for assignment
+            float cumulative = 0;
+            for(int i = 0; i < shared_macros[1]; i++) {
+                wait_semaphore(semid, i);
+                
+                // Determine task based on proportional distribution
+                float random = (float)i / shared_macros[1]; // Distribute evenly across seats
+                int assigned_task = 0;
+                cumulative = 0;
+                
+                for(int j = 0; j < 6; j++) {
+                    cumulative += proportions[j];
+                    if(random <= cumulative) {
+                        assigned_task = j;
+                        break;
+                    }
+                }
+                
+                shared_seats[i].task = assigned_task;
+                signal_semaphore(semid, i);
+            }
+        }
+    } else {
+        // Initial distribution for first day remains the same
+        for(int i = 0; i < shared_macros[1]; i++) {
+            wait_semaphore(semid, i);
+            shared_seats[i].task = i % 6;
+            signal_semaphore(semid, i);
+        }
+    }
 }
 
 int reset_ipc(int semid, int num_sem) {
@@ -295,4 +414,19 @@ int reset_ipc(int semid, int num_sem) {
     }
     
     return 0;
+}
+
+void cleanup(){
+    shmdt(shared_macros); 
+    shmdt(shared_daily_stats);
+    shmdt(shared_tot_stats); 
+    shmdt(shared_seats);
+    
+    shmctl(shmid_macros, IPC_RMID, NULL);
+    shmctl(shmid_daily_stats, IPC_RMID, NULL);
+    shmctl(shmid_tot_stats, IPC_RMID, NULL);
+    shmctl(shmid_seats, IPC_RMID, NULL);
+
+    msgctl(msgid, IPC_RMID, NULL);
+    semctl(semid, 0, IPC_RMID);
 }

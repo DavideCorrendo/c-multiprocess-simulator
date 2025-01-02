@@ -56,6 +56,8 @@ typedef struct daily_stats{
     float avg_time_users_wait_daily;
     float avg_time_tasks_done_daily;
 
+    int user_served_per_task[6];
+    int user_not_served_per_task[6];
     int time_task_daily_per_task[6];
     int time_wait_daily_per_task[6];
 
@@ -93,6 +95,9 @@ typedef struct tot_stats{
     float avg_time_wait_per_task[6];
     float avg_time_task_per_task[6];
 
+    int num_worker_active;
+    int num_pause;
+
 }tot_stats;
 
 
@@ -117,7 +122,7 @@ int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void get_function(int *, int *, int *, int *, int *, int *);
 void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
-
+void cleanup();
 
 
 #endif
