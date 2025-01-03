@@ -122,12 +122,14 @@ int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
 void get_function(int *, int *, int *, int *, int *, int *);
-void initialize_keys(key_t *, key_t *, key_t *, key_t *, key_t *, key_t *);
+void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_macros_key, key_t *sem_key, key_t *msg_key);
 int num_user_waiting(int semid, int *shared_macros);
 void signal_handler(int sig);
 void handle_child_exit(int sig);
 void handle_termination(int sig);
 void cleanup(void);
+void initialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
+int sem_operation(int semid, int sem_num, int op_value);
 
 
 #endif

@@ -8,7 +8,9 @@ void simulate_day(int *simulated_minutes);
 void print_stats(int day);
 void tasks_assignment(int day);
 int reset_ipc(int semid, int num_sem);
+void cleanup();
 
+static struct message msg;
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
 static int shmid_seats = -1;
@@ -19,6 +21,18 @@ static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
 static int *shared_macros = NULL;
+static pid_t *child_pids = NULL;
+static int num_children = 0;
+
+void add_child_pid(pid_t pid) {
+    num_children++;
+    child_pids = realloc(child_pids, num_children * sizeof(pid_t));
+    if (child_pids == NULL) {
+        perror("Failed to allocate memory for child PIDs");
+        exit(EXIT_FAILURE);
+    }
+    child_pids[num_children - 1] = pid;
+}
 
 void setup_signal_handlers() {
     struct sigaction sa;
@@ -44,6 +58,11 @@ void setup_signal_handlers() {
     // SIGINT handler
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("sigaction SIGINT failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+        perror("sigaction SIGSEGV failed");
         exit(EXIT_FAILURE);
     }
 }
@@ -79,7 +98,7 @@ void handle_termination(int sig) {
     
     cleanup();
     
-    exit(EXIT_SUCCESS);
+    exit(EXIT_FAILURE);
 }
 
 void validate_inputs(int argc, char **argv) {
@@ -101,7 +120,7 @@ int main(int argc, char **argv) {
 
     if(argc != 5){
         fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE>\n", argv[0]);
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     const char *file_timeout = "config_timeout.conf";
@@ -118,23 +137,11 @@ int main(int argc, char **argv) {
     int NOF_USERS = atoi(argv[3]);
     int N_OF_PAUSE = atoi(argv[4]);
 
-    int shmid_daily_stats;
-    int shmid_tot_stats;
-    int shmid_seats;
-    int shmid_macros;
-
-    daily_stats *shared_daily_stats;
-    tot_stats *shared_tot_stats;
-    worker_seat *shared_seats;
-    int *shared_macros;
-
     puts("program started");
-
-    int msgid;
-    int semid;
 
     initialization_shm(&shmid_daily_stats, &shmid_tot_stats, &shmid_seats, &shmid_macros, SIM_DURATION, NOF_WORKERSEATS,
                        &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros, &msgid, &semid);
+
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
         shared_seats[i].id = i;
@@ -158,52 +165,56 @@ int main(int argc, char **argv) {
     shared_macros[3] = SIM_DURATION;
     shared_macros[4] = N_OF_PAUSE; 
 
-    struct message msg;
     memset(&msg, 0, sizeof(struct message));
+
+    printf("%d\n", semid);
+    for(int i = 0; i < shared_macros[1] + 3; i++){
+        init_semaphore(semid, i, 1);
+    }
 
     puts("initializzazion finished");
 
     pid_t pid = fork();
     if (pid == 0) {
+        add_child_pid(pid);
         execv("./bin/ticket_erogator", (char*[]){ "bin/ticket_erogator", NULL });
         perror("execv ticket_erogator failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
-    puts("ticket erogator opened");
-
-    msg.mtype = 2;
     for(int i = 0; i < NOF_WORKERS; i++) {
         pid = fork();
         if (pid == 0) {
             char worker_id_str[32];
             snprintf(worker_id_str, sizeof(worker_id_str), "%d", i + 1); 
+            add_child_pid(pid);
             execv("./bin/worker", (char*[]){ "bin/worker", worker_id_str, NULL });
             perror("execv worker failed");
-            exit(EXIT_FAILURE);
+            raise(SIGTERM);
         }
     }
-
-    
-    puts("worker opened");
     
 
     for(int i = 0; i < NOF_USERS; i++) {
         pid = fork();
         if (pid == 0) {
+            add_child_pid(pid);
             execv("./bin/user", (char*[]){ "bin/user", NULL });
             perror("execv user failed");
-            exit(EXIT_FAILURE);
+            raise(SIGTERM);
         }
     }
 
-    puts("user_opened");
-
-    for(int i = 1; i <= SIM_DURATION; i++){
+    for(int i = 0; i < SIM_DURATION; i++){
+        puts("1");
         initSem(semid, 5 + NOF_WORKERSEATS);
+        puts("2");
         tasks_assignment(i); 
+        puts("3");
         msg.mtype = 1;
+        puts("4");
         strcpy(msg.mtext, "start");
+        puts("5");
         msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
         simulate_day(&shared_macros[2]);
         strcpy(msg.mtext, "end");
@@ -217,7 +228,7 @@ int main(int argc, char **argv) {
         reset_ipc(semid, shared_macros[1] + 1);            
     }
 
-    strcpy(msg.mtext, "end");
+    strcpy(msg.mtext, "end_simulation");
     msg.mtype = 5;
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
 
@@ -240,60 +251,61 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
     initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
 
+
     // Create shared memory segments for the actual structures, not pointers
     *shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), IPC_CREAT | 0666);
     if (*shmid_daily_stats == -1) {
         perror("shmget stats failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), IPC_CREAT | 0666);
     if (*shmid_tot_stats == -1) {
         perror("shmget stats failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *shmid_seats = shmget(shm_seats_key, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
     if (*shmid_seats == -1) {
-        perror("shmget seats failed");
-        exit(EXIT_FAILURE);
+        perror("shmget seats failed in director");
+        raise(SIGTERM);
     }
 
     *shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, IPC_CREAT | 0666);
     if (*shmid_macros == -1) {
         perror("shmget macros failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     // Attach shared memory
     *shared_daily_stats = (daily_stats *)shmat(*shmid_daily_stats, NULL, 0);
     if (*shared_daily_stats == (void *)-1) {
         perror("shmat stats failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *shared_tot_stats = (tot_stats*)shmat(*shmid_tot_stats, NULL, 0);
     if (*shared_tot_stats == (void *)-1) {
         perror("shmat stats failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *shared_seats = (worker_seat *)shmat(*shmid_seats, NULL, 0);
     if (*shared_seats == (void *)-1) {
         perror("shmat seats failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *shared_macros = (int*) shmat(*shmid_macros, NULL, 0);
     if (*shared_macros == (void *)-1) {
         perror("shmat macros failed");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     *msgid = msgget(msg_key, IPC_CREAT | 0666);
     if (*msgid == -1) {
-        perror("msgget failed");
-        exit(EXIT_FAILURE);
+        perror("msgget failed in director");
+        raise(SIGTERM);
     }
 
     *semid = semget(sem_key, 100, IPC_CREAT | 0666);
@@ -447,7 +459,6 @@ void print_stats(int day){
 void tasks_assignment(int day) {
     int num = 0;
     float proportions[6] = {0}; // Array to store task proportions
-
     if(day > 0){
         num = shared_daily_stats[day - 1].user_served_daily + shared_daily_stats[day - 1].user_not_served_daily;
         float num1 = shared_daily_stats[day - 1].user_served_per_task[0] + shared_daily_stats[day - 1].user_not_served_per_task[0];
@@ -456,7 +467,6 @@ void tasks_assignment(int day) {
         float num4 = shared_daily_stats[day - 1].user_served_per_task[3] + shared_daily_stats[day - 1].user_not_served_per_task[3];
         float num5 = shared_daily_stats[day - 1].user_served_per_task[4] + shared_daily_stats[day - 1].user_not_served_per_task[4];
         float num6 = shared_daily_stats[day - 1].user_served_per_task[5] + shared_daily_stats[day - 1].user_not_served_per_task[5];
-
         if(num != 0) {
             // Calculate proportions for each task type
             proportions[0] = num1 / num;
@@ -490,11 +500,14 @@ void tasks_assignment(int day) {
         }
     } else {
         // Initial distribution for first day remains the same
+        puts("bho");
         for(int i = 0; i < shared_macros[1]; i++) {
+            puts("wait");
             wait_semaphore(semid, i);
             shared_seats[i].task = i % 6;
             signal_semaphore(semid, i);
         }
+        puts("fatto");
     }
 }
 
@@ -522,15 +535,44 @@ int reset_ipc(int semid, int num_sem) {
 }
 
 void cleanup(){
+
+if (child_pids != NULL) {
+        for (int i = 0; i < num_children; i++) {
+            if (child_pids[i] > 0) {
+                kill(child_pids[i], SIGTERM);
+            }
+        }
+        
+        // Wait for a short time to allow processes to terminate
+        sleep(1);
+        
+        // Check if any processes need to be forced to terminate
+        for (int i = 0; i < num_children; i++) {
+            if (child_pids[i] > 0) {
+                if (kill(child_pids[i], 0) == 0) {
+                    // Process still exists, force terminate
+                    kill(child_pids[i], SIGKILL);
+                }
+            }
+        }
+        
+        free(child_pids);
+        child_pids = NULL;
+    }
+
     shmdt(shared_macros); 
     shmdt(shared_daily_stats);
     shmdt(shared_tot_stats); 
     shmdt(shared_seats);
     
     shmctl(shmid_macros, IPC_RMID, NULL);
+    printf("shm [id:%d] removed\n", shmid_macros);
     shmctl(shmid_daily_stats, IPC_RMID, NULL);
+    printf("shm [id:%d] removed\n", shmid_daily_stats);
     shmctl(shmid_tot_stats, IPC_RMID, NULL);
+    printf("shm [id:%d] removed\n", shmid_tot_stats);
     shmctl(shmid_seats, IPC_RMID, NULL);
+    printf("shm [id:%d] removed\n", shmid_seats);
 
     msgctl(msgid, IPC_RMID, NULL);
     semctl(semid, 0, IPC_RMID);

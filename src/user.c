@@ -5,7 +5,6 @@ static worker_seat *shared_seats = NULL;
 
 void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
 void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, bool *end_day);
-void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key);
 void cleanup_resources();
 
 void signal_handler(int sig) {
@@ -29,15 +28,15 @@ int main() {
     
     if (sigaction(SIGINT, &sa, NULL) == -1) {
         perror("sigaction SIGINT");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
         perror("sigaction SIGTERM");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
     if (sigaction(SIGHUP, &sa, NULL) == -1) {
         perror("sigaction SIGHUP");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
     struct message msg;
 
@@ -46,45 +45,48 @@ int main() {
     key_t sem_key;
     key_t msg_key;
 
-    inizialize_keys_modified(&shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
+    initialize_keys_modified(&shm_macros_key, &sem_key, &msg_key, &shm_seats_key);
     int msgid = msgget(msg_key, 0);
     if(msgid == -1) {
-        perror("msgget");
-        exit(EXIT_FAILURE);
+        perror("msgget in user");
+        raise(SIGTERM);
     }
 
     int shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
     if(shmid_macros == -1) {
-        perror("shmget");
-        exit(EXIT_FAILURE);
+        perror("shmget in user for macros");
+        raise(SIGTERM);
     }
     shared_macros = shmat(shmid_macros, NULL, 0);
     if (shared_macros == (void *)-1) {
         perror("shmat failed for macros");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     int semid = semget(sem_key, 3 * shared_macros[1] + 2, 0);
     if(semid == -1) {
         perror("semget");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     int shmid_seats = shmget(shm_seats_key, shared_macros[1] * sizeof(worker_seat), 0);
     if(shmid_seats == -1) {
-        perror("shmget");
-        exit(EXIT_FAILURE);
+        perror("shmget in user for seats");
+        raise(SIGTERM);
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
     if (shared_seats == (void *)-1) {
         perror("shmat failed for seats");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
 
     bool end_day;
+    sleep(1);
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
     //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
+
 
         for(int i = 0; i < shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
             int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;//probabilty to go to the office
@@ -146,25 +148,6 @@ void task_time(struct message msg, int msgid, int semid, int *shared_macros, int
     signal_semaphore(semid, shared_macros[1]- 1);
 }
 
-void inizialize_keys_modified(key_t *shm_seats_key,key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key) {
-    if((*shm_seats_key = ftok("/tmp", 'C')) == -1){
-        perror("ftok: ");
-        exit(EXIT_FAILURE);
-    }
-    if((*shm_macros_key = ftok("/tmp", 'D')) == -1){
-        perror("ftok: ");
-        exit(EXIT_FAILURE);
-    }
-    if((*sem_key = ftok("/tmp", 'E')) == -1){
-        perror("ftok: ");
-        exit(EXIT_FAILURE);
-    }
-    if((*msg_key = ftok("/tmp", 'F')) == -1){
-        perror("ftok: ");
-        exit(EXIT_FAILURE);
-    }
-}
-
 void cleanup_resources() {
     if (shared_seats != NULL) {
         shmdt(shared_seats);
@@ -174,6 +157,4 @@ void cleanup_resources() {
         shmdt(shared_macros);
         shared_macros = NULL;
     }
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
 }

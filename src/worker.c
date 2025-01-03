@@ -19,25 +19,14 @@ static int *shared_macros = NULL;
 
 // Cleanup function
 void cleanup_resources() {
-    // Detach from shared memory segments
-    if (shared_daily_stats != NULL) {
-        shmdt(shared_daily_stats);
-        shared_daily_stats = NULL;
-    }
-    if (shared_tot_stats != NULL) {
-        shmdt(shared_tot_stats);
-        shared_tot_stats = NULL;
-    }
-    if (shared_seats != NULL) {
-        shmdt(shared_seats);
-        shared_seats = NULL;
-    }
-    if (shared_macros != NULL) {
-        shmdt(shared_macros);
-        shared_macros = NULL;
-    }
-    signal(SIGINT, SIG_DFL);
-    signal(SIGTERM, SIG_DFL);
+    if (shared_daily_stats && shmdt(shared_daily_stats) == -1)
+        perror("Failed to detach shared_daily_stats");
+    if (shared_tot_stats && shmdt(shared_tot_stats) == -1)
+        perror("Failed to detach shared_tot_stats");
+    if (shared_seats && shmdt(shared_seats) == -1)
+        perror("Failed to detach shared_seats");
+    if (shared_macros && shmdt(shared_macros) == -1)
+        perror("Failed to detach shared_macros");
 }
 
 // Signal handler
@@ -50,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     if(argc != 2){
         printf("too many arguments");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     struct message msg;
@@ -77,36 +66,66 @@ int main(int argc, char *argv[]) {
     initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
 
     shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
+    if(shmid_macros == -1){
+        perror("shmget in worker");
+        raise(SIGTERM);
+    }
     shared_macros = shmat(shmid_macros, NULL, 0);
     if (shared_macros == (void *)-1) {
         perror("shmat failed for macros in worker");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     shmid_daily_stats = shmget(shm_daily_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
+    if(shmid_daily_stats == -1){
+        perror("shmget in worker");
+        raise(SIGTERM);
+    }
     shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
     if (shared_daily_stats == (void *)-1) {
         perror("shmat failed for stats in worker");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
+    if(shmid_tot_stats == -1){
+        perror("shmget in worker");
+        raise(SIGTERM);
+    }
     shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
     if (shared_tot_stats == (void *)-1) {
         perror("shmat failed for stats in worker");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
     }
 
     shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
+    if(shmid_seats == -1){
+        perror("shmget in worker");
+        raise(SIGTERM);
+    }
     shared_seats = shmat(shmid_seats, NULL, 0);
     if (shared_seats == (void *)-1) {
         perror("shmat failed for seats in workerg");
-        exit(EXIT_FAILURE);
+        raise(SIGTERM);
+    }
+
+    semid = semget(sem_key, shared_macros[1] + 3, 0);
+    if(semid == -1){
+        perror("semid");
+        raise(SIGTERM);
+    }
+
+    msgid = msgget(msg_key, 0);
+    if(msgid == -1){
+        perror("msgget");
+        raise(SIGTERM);
     }
 
     int time_tasks[6] = TIMES_ARRAY;
     int pause_counter = 0;
     memset(&msg, 0, sizeof(msg));
+    sleep(1);
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
     for (int i = 1; i <= shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
 
@@ -163,19 +182,19 @@ void working_time(worker_seat *shared_seats, daily_stats *shared_daily_stats, to
 }
 
 bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid) {
+    bool res = false;
     for (int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i);
         if (shared_seats[i].task == task && !shared_seats[i].busy) {
             if (!shared_seats[i].busy) {
                 shared_seats[i].busy = true;
                 shared_seats[i].worker_id = id_worker;
-                signal_semaphore(semid, i);
-                return true;
+                res = true;
             }
         }
         signal_semaphore(semid, i);
     }
-    return false;
+    return res;
 }
 
 void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int task_time, bool pause, int wait_time){
