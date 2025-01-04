@@ -10,8 +10,8 @@ E = sem
 F = msg
 
 messages queue:
-1 = start/end day
-2 = 
+1 = start day
+2 = end day
 3 = ticket_erogator <---> director
 4 = ticket_erogator <---> user
 5 = end simulation
@@ -27,13 +27,9 @@ shared_macros:
 2 = timer
 3 = SIM_DURATION
 4 = NOF_PAUSE
-5 = TOT_SERVED
-6 = TOT_TASK_DONE
-7 = TOT_TASK_NOT_DONE
-8 = TOT_TIME_WAIT
-9 = TOT_TIME_TASK
-10 = TOT_NUM_WORKER_ACTIVE
-11 = NUM_PAUSE_TOT
+5 = NUM_PROCESS_FINISHED
+6 = N_REQUESTS
+7 = NOF_USER
 
 semaphores: the first shared_macros[1] semaphores are for the seats, then 1 for shared_stats
 --> shared_macros[1] for seats

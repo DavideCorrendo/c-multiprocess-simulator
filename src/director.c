@@ -4,11 +4,14 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
                        int SIM_DURATION, int NOF_WORKERSEATS, daily_stats **shared_daily_stats, 
                        tot_stats **shared_tot_stats, worker_seat **shared_seats, int **shared_macros, 
                        int *msgid, int *semid);
-void simulate_day(int *simulated_minutes);
+void simulate_day();
 void print_stats(int day);
 void tasks_assignment(int day);
 int reset_ipc(int semid, int num_sem);
 void cleanup();
+void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s);
+void wait_processes();
+
 
 static struct message msg;
 static int shmid_daily_stats = -1;
@@ -21,7 +24,7 @@ static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
 static int *shared_macros = NULL;
-static pid_t *child_pids = NULL;
+static pid_t *child_pids;
 static int num_children = 0;
 
 void add_child_pid(pid_t pid) {
@@ -102,8 +105,8 @@ void handle_termination(int sig) {
 }
 
 void validate_inputs(int argc, char **argv) {
-    if (argc != 5) {
-        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE>\n", argv[0]);
+    if (argc != 6) {
+        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE> <N_REQUEST>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     for (int i = 1; i < argc; i++) {
@@ -118,11 +121,6 @@ int main(int argc, char **argv) {
     validate_inputs(argc, argv);
     setup_signal_handlers();     
 
-    if(argc != 5){
-        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE>\n", argv[0]);
-        raise(SIGTERM);
-    }
-
     const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
 
@@ -136,11 +134,12 @@ int main(int argc, char **argv) {
     int NOF_WORKERS = atoi(argv[2]);
     int NOF_USERS = atoi(argv[3]);
     int N_OF_PAUSE = atoi(argv[4]);
+    int N_REQUEST = atoi(argv[5]);
 
     puts("program started");
 
     initialization_shm(&shmid_daily_stats, &shmid_tot_stats, &shmid_seats, &shmid_macros, SIM_DURATION, NOF_WORKERSEATS,
-                       &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros, &msgid, &semid);
+    &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros, &msgid, &semid);
 
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
@@ -164,6 +163,9 @@ int main(int argc, char **argv) {
     shared_macros[2] = 0;
     shared_macros[3] = SIM_DURATION;
     shared_macros[4] = N_OF_PAUSE; 
+    shared_macros[5] = 0;
+    shared_macros[6] = N_REQUEST;
+    shared_macros[7] = NOF_USERS;
 
     memset(&msg, 0, sizeof(struct message));
 
@@ -176,61 +178,57 @@ int main(int argc, char **argv) {
 
     pid_t pid = fork();
     if (pid == 0) {
-        add_child_pid(pid);
         execv("./bin/ticket_erogator", (char*[]){ "bin/ticket_erogator", NULL });
         perror("execv ticket_erogator failed");
         raise(SIGTERM);
     }
+    add_child_pid(pid);
 
     for(int i = 0; i < NOF_WORKERS; i++) {
         pid = fork();
         if (pid == 0) {
             char worker_id_str[32];
             snprintf(worker_id_str, sizeof(worker_id_str), "%d", i + 1); 
-            add_child_pid(pid);
+            add_child_pid(getpid());
             execv("./bin/worker", (char*[]){ "bin/worker", worker_id_str, NULL });
             perror("execv worker failed");
             raise(SIGTERM);
         }
+        add_child_pid(pid);
     }
     
 
     for(int i = 0; i < NOF_USERS; i++) {
         pid = fork();
         if (pid == 0) {
-            add_child_pid(pid);
             execv("./bin/user", (char*[]){ "bin/user", NULL });
             perror("execv user failed");
             raise(SIGTERM);
         }
+        add_child_pid(pid);
     }
 
     for(int i = 0; i < SIM_DURATION; i++){
-        puts("1");
-        initSem(semid, 5 + NOF_WORKERSEATS);
-        puts("2");
         tasks_assignment(i); 
-        puts("3");
         msg.mtype = 1;
-        puts("4");
         strcpy(msg.mtext, "start");
-        puts("5");
-        msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
-        simulate_day(&shared_macros[2]);
+        send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0, "start"); 
+        simulate_day();
         strcpy(msg.mtext, "end");
-        msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0);
+        send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0, "end");
         if(num_user_waiting(semid, shared_macros) >= explode_threshold){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-    
-        print_stats(i);     
-        reset_ipc(semid, shared_macros[1] + 1);            
+        wait_processes();
+        //print_stats(i);
+        send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end_simulation");
+        reset_ipc(semid, shared_macros[1] + 1);        
     }
 
-    strcpy(msg.mtext, "end_simulation");
-    msg.mtype = 5;
-    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
+    send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "end_simulation");
+
+    sleep(1);
 
     cleanup();
 
@@ -316,28 +314,11 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
     
 }
 
-void simulate_day(int *simulated_minutes) {
-    struct timespec start_time, current_time;
-    unsigned long long elapsed_nanos = 0;
-
-    // Record the starting time
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-    while (*simulated_minutes < 480) { // 480 minutes for 8h of work
-        clock_gettime(CLOCK_MONOTONIC, &current_time);
-
-        // Calculate elapsed time in nanoseconds
-        elapsed_nanos = (current_time.tv_sec - start_time.tv_sec) * 1000000000ULL +
-                        (current_time.tv_nsec - start_time.tv_nsec);
-
-        // Check if a simulated minute has passed
-        if (elapsed_nanos >= N_NANO_SEC * ((unsigned long long)(*simulated_minutes) + 1)) {
-            (*simulated_minutes)++;
-            //printf("Simulated Time: %02d:%02d (HH:MM)\n", *simulated_minutes / 60, *simulated_minutes % 60);
-        }
-
-        // Sleep for a short while to reduce CPU usage
-        usleep(100);
+void simulate_day() {
+    
+    while(shared_macros[2] < 480){
+        usleep(N_NANO_SEC);
+        shared_macros[2]++;
     }
 
     printf("Simulation complete: A full day has passed in simulated time.\n");
@@ -457,61 +438,18 @@ void print_stats(int day){
 }
 
 void tasks_assignment(int day) {
-    int num = 0;
-    float proportions[6] = {0}; // Array to store task proportions
-    if(day > 0){
-        num = shared_daily_stats[day - 1].user_served_daily + shared_daily_stats[day - 1].user_not_served_daily;
-        float num1 = shared_daily_stats[day - 1].user_served_per_task[0] + shared_daily_stats[day - 1].user_not_served_per_task[0];
-        float num2 = shared_daily_stats[day - 1].user_served_per_task[1] + shared_daily_stats[day - 1].user_not_served_per_task[1];
-        float num3 = shared_daily_stats[day - 1].user_served_per_task[2] + shared_daily_stats[day - 1].user_not_served_per_task[2];
-        float num4 = shared_daily_stats[day - 1].user_served_per_task[3] + shared_daily_stats[day - 1].user_not_served_per_task[3];
-        float num5 = shared_daily_stats[day - 1].user_served_per_task[4] + shared_daily_stats[day - 1].user_not_served_per_task[4];
-        float num6 = shared_daily_stats[day - 1].user_served_per_task[5] + shared_daily_stats[day - 1].user_not_served_per_task[5];
-        if(num != 0) {
-            // Calculate proportions for each task type
-            proportions[0] = num1 / num;
-            proportions[1] = num2 / num;
-            proportions[2] = num3 / num;
-            proportions[3] = num4 / num;
-            proportions[4] = num5 / num;
-            proportions[5] = num6 / num;
-
-            // Calculate cumulative proportions for assignment
-            float cumulative = 0;
-            for(int i = 0; i < shared_macros[1]; i++) {
-                wait_semaphore(semid, i);
-                
-                // Determine task based on proportional distribution
-                float random = (float)i / shared_macros[1]; // Distribute evenly across seats
-                int assigned_task = 0;
-                cumulative = 0;
-                
-                for(int j = 0; j < 6; j++) {
-                    cumulative += proportions[j];
-                    if(random <= cumulative) {
-                        assigned_task = j;
-                        break;
-                    }
-                }
-                
-                shared_seats[i].task = assigned_task;
-                signal_semaphore(semid, i);
-            }
-        }
-    } else {
-        // Initial distribution for first day remains the same
-        puts("bho");
-        for(int i = 0; i < shared_macros[1]; i++) {
-            puts("wait");
-            wait_semaphore(semid, i);
-            shared_seats[i].task = i % 6;
-            signal_semaphore(semid, i);
-        }
-        puts("fatto");
+    (void)day;
+    for(int i = 0; i < shared_macros[1]; i++) {
+        wait_semaphore(semid, i);
+        shared_seats[i].task = i % 6;
+        signal_semaphore(semid, i);
     }
 }
 
 int reset_ipc(int semid, int num_sem) {
+
+    shared_macros[6] = 0;
+
     union semun {
         int val;
         struct semid_ds *buf;
@@ -530,6 +468,8 @@ int reset_ipc(int semid, int num_sem) {
         return -1;
     }
     
+    shared_macros[2] = 0;
+
     free(values);
     return 0;
 }
@@ -540,6 +480,7 @@ if (child_pids != NULL) {
         for (int i = 0; i < num_children; i++) {
             if (child_pids[i] > 0) {
                 kill(child_pids[i], SIGTERM);
+                printf("%d killed\n", child_pids[i]);
             }
         }
         
@@ -576,4 +517,22 @@ if (child_pids != NULL) {
 
     msgctl(msgid, IPC_RMID, NULL);
     semctl(semid, 0, IPC_RMID);
+}
+
+void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s){
+    strcpy(msg->mtext, s);
+    if(strcmp(s, "end") == 0)msg->num = -1;
+    msg->mtype = type;
+    for(int i = 0; i < shared_macros[8] + shared_macros[0] + 1; i++){
+        msgsnd(msgid, msg, size, flag);
+    }
+}
+
+void wait_processes(){
+
+    while(1){
+        if(shared_macros[6] == shared_macros[8] + shared_macros[0] + 1)break;
+        usleep(350);
+    }
+
 }

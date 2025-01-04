@@ -1,10 +1,10 @@
 #include "main.h"
 
-bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid);
-void working_time(worker_seat *shared_seats, daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int *shared_macros, int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
-void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int task_time, bool pause, int wait_time);
-int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task);
-float ratio_worker_seats(int *shared_macros, worker_seat *shared_seats, int index);
+bool find_seat(int task, int id_worker, int semid);
+void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
+void update_stats(int semid, int day, int task, int user_served, int task_time, bool pause, int wait_time);
+int worker_per_task(int task);
+float ratio_worker_seats(int index);
 
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
@@ -124,64 +124,70 @@ int main(int argc, char *argv[]) {
     int time_tasks[6] = TIMES_ARRAY;
     int pause_counter = 0;
     memset(&msg, 0, sizeof(msg));
-    sleep(1);
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
-    for (int i = 1; i <= shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
+    int day = 0;
+    bool end = false;
 
-        while (!find_seat(shared_seats, shared_macros, task, id_worker, semid)) {
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, IPC_NOWAIT);
-            if(strcmp(msg.mtext, "end") == 0)continue;
-            usleep(500);
+    while(strcmp(msg.mtext, "end_simulation") != 0){
+
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+        end = false;
+
+        while (!find_seat(task, id_worker, semid)) {
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
+            if(strcmp(msg.mtext, "end") == 0){end = true; break;}
+            usleep(N_NANO_SEC * 5);
         }
+        if(end == false)working_time(task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, day);
 
-        working_time(shared_seats, shared_daily_stats, shared_tot_stats, shared_macros, task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, i);
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, IPC_NOWAIT);
+        wait_semaphore(semid, shared_macros[1] + 1);
+        shared_macros[6]++;
+        signal_semaphore(semid, shared_macros[1] + 1);
+
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
+
     }
 
     cleanup_resources();
     exit(EXIT_SUCCESS);
 }
 
-void working_time(worker_seat *shared_seats, daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int *shared_macros, int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day) {
+void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day) {
     char s[10] = "done";
 
-    msgrcv(msgid, msg, sizeof(struct message), 1, 0);
     bool pause = false;
-    int start_task, end_task, user_served = 0, time_task_count = 0, wait_time = 0;
+    int user_served = 0, time_task_count = 0, wait_time = 0;
 
     while (strcmp(msg->mtext, "end") != 0 && !pause) {
         msgrcv(msgid, msg, sizeof(struct message), 5 + id_worker, 0);
+        if(msg->num == 0)break;
         wait_time += msg->num;
-        start_task = shared_macros[2];
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;
-        time_task *= avg_time_task;
+        time_task *= (float)avg_time_task;
         usleep(time_task * N_NANO_SEC);
 
-        end_task = shared_macros[2];
         strcpy(msg->mtext, s);
         msg->mtype = 5 + id_worker;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
-        time_task_count += (end_task - start_task);
+        time_task_count += time_task;
 
         if (((rand() % 100) <= 10) && pause_counter < shared_macros[4]) {
             pause_counter++;
             pause = true;
         }
 
-        msgrcv(msgid, msg, sizeof(struct message), 1, IPC_NOWAIT);
+        msgrcv(msgid, msg, sizeof(struct message), 2, IPC_NOWAIT);
     }
 
-    usleep(500);
     wait_semaphore(semid, shared_macros[1]);
-    update_stats(shared_daily_stats, shared_tot_stats, semid, day, shared_macros, task, shared_seats, user_served, time_task_count, pause, wait_time);
+    update_stats(semid, day, task, user_served, time_task_count, pause, wait_time);
     signal_semaphore(semid, shared_macros[1]);
 }
 
-bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_worker, int semid) {
+bool find_seat(int task, int id_worker, int semid) {
     bool res = false;
     for (int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i);
@@ -197,9 +203,9 @@ bool find_seat(worker_seat *shared_seats, int *shared_macros, int task, int id_w
     return res;
 }
 
-void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, int semid, int day, int *shared_macros, int task, worker_seat *shared_seats, int user_served, int task_time, bool pause, int wait_time){
+void update_stats(int semid, int day, int task, int user_served, int task_time, bool pause, int wait_time){
 
-    int num = worker_per_task(shared_macros, shared_seats, task);
+    int num = worker_per_task(task);
 
     shared_tot_stats->wait_time += wait_time;
     shared_tot_stats->task_time += task_time;
@@ -257,12 +263,12 @@ void update_stats(daily_stats *shared_daily_stats, tot_stats *shared_tot_stats, 
     shared_daily_stats[day].avg_num_pause_daily = shared_daily_stats[day].num_pause_daily / num;
 
     for(int i = 0; i < shared_macros[1]; i++){
-        shared_daily_stats[day].num_ratio_worker_user[i] = ratio_worker_seats(shared_macros, shared_seats, i);
+        shared_daily_stats[day].num_ratio_worker_user[i] = ratio_worker_seats(i);
     }
 
 }
 
-float ratio_worker_seats(int *shared_macros, worker_seat *shared_seats, int index){
+float ratio_worker_seats(int index){
     
     int num_workerseats_per_task = 0;
     for(int i = 0; i < shared_macros[1]; i++){
@@ -270,10 +276,10 @@ float ratio_worker_seats(int *shared_macros, worker_seat *shared_seats, int inde
             num_workerseats_per_task++;
         }
     }
-    return worker_per_task(shared_macros, shared_seats, shared_seats[index].task) / num_workerseats_per_task;
+    return worker_per_task(shared_seats[index].task) / num_workerseats_per_task;
 }
 
-int worker_per_task(int* shared_macros, worker_seat *shared_seats, int task){
+int worker_per_task(int task){
     int cont = 0;
     for(int i = 0; i < shared_macros[0]; i++){
         if(shared_seats[i].task == task){

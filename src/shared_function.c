@@ -128,3 +128,4 @@ void initialize_keys_modified(key_t *shm_macros_key, key_t *sem_key, key_t *msg_
         exit(EXIT_FAILURE);
     }
 }
+

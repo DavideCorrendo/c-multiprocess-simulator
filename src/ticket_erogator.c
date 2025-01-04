@@ -73,18 +73,29 @@ int main() {
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
-    sleep(1);
-
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
     while(strcmp(msg.mtext, "end_simulation") != 0){
 
-        msgrcv(msgid, &msg, sizeof(struct message), 4, 0);
-        
-        msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
-        msgsnd(msgid, &msg, sizeof(struct message), 4);
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
-        msgrcv(msgid, &msg, sizeof(struct message), 5, IPC_NOWAIT);
+        while(strcmp(msg.mtext, "end") != 0){
+
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
+
+            if(msg.num == -1)break;
+
+            msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
+            msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
+
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, IPC_NOWAIT);
+
+        }
+
+        wait_semaphore(semid, shared_macros[1] + 1);
+        shared_macros[6]++;
+        signal_semaphore(semid, shared_macros[1] + 1);
+
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
     }
 

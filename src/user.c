@@ -4,8 +4,9 @@ static int *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
 void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, bool *end_day);
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, int seat_num, bool *end_day);
 void cleanup_resources();
+int random_weighted(int values[], int weights[], int size);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -80,35 +81,47 @@ int main() {
         raise(SIGTERM);
     }
 
-
     bool end_day;
-    sleep(1);
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+
+    srand(time(NULL));
+
+    int values[] = {0, 1, 2, 3, 4, 5};
+    int weights[] = {50, 20, 15, 10, 4, 1};
+    int size_r = sizeof(values) / sizeof(values[0]);
+
 
     //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
 
 
-        for(int i = 0; i < shared_macros[3] && strcmp(msg.mtext, "end_simulation") != 0; i++) {
-            int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;//probabilty to go to the office
+        while(strcmp(msg.mtext, "end_simulation") != 0) {
 
+            int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;//probabilty to go to the office
             int decision = rand() % 101;
-            int num_task = (rand() % 5) + 1;
+            int num_task = (rand() % shared_macros[7]) + 1;
             int time = rand() % 480;
             end_day = false;
 
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
             usleep(time * N_NANO_SEC);
 
-            while(decision <= P_SERV && num_task != 0 && !end_day){
+            while(decision <= P_SERV && !end_day){
                 //<----------------TIME DECISION---------------------------->
-                int task = rand() % 6;
+                int task = random_weighted(values, weights, size_r);
 
                 office_time(msg, task, msgid, semid, shared_macros, shared_seats, &end_day);
                 if(end_day)break;
 
+                msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
+                if(strcmp(msg.mtext, "end") == 0)break;
+
                 num_task--;
             }
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, IPC_NOWAIT);
+
+            wait_semaphore(semid, shared_macros[1] + 1);
+            shared_macros[6]++;
+            signal_semaphore(semid, shared_macros[1] + 1);
+
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
         }
     
     cleanup_resources(shared_macros, shared_seats);
@@ -126,26 +139,26 @@ void office_time(struct message msg, int task, int msgid, int semid, int *shared
     }
     int seat_num = msg.num;
 
-    task_time(msg, msgid, semid, shared_macros, shared_seats[seat_num].worker_id, end_day);
+    task_time(msg, msgid, semid, shared_macros, shared_seats[seat_num].id, seat_num, end_day);
 
 }
 
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, bool *end_day) {
+void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, int seat_num, bool *end_day) {
     int start_time = shared_macros[2];
-    wait_semaphore(semid, shared_macros[1]- 1);
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 0, IPC_NOWAIT);
-    if(strcmp(msg.mtext, "end") == 0){
-        *end_day = true;
-        signal_semaphore(semid, shared_macros[1]- 1);
-        return;
-    }
-
+    wait_semaphore(semid, seat_num);
     msg.mtype = 5 + worker_id;
     msg.num = shared_macros[2] - start_time;
+
+    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
+    if(strcmp(msg.mtext, "end") == 0){
+        *end_day = true;
+        msg.num = 0;
+    }
+
     msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
     msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long),  5 + worker_id, 0);
 
-    signal_semaphore(semid, shared_macros[1]- 1);
+    signal_semaphore(semid, seat_num);
 }
 
 void cleanup_resources() {
@@ -157,4 +170,23 @@ void cleanup_resources() {
         shmdt(shared_macros);
         shared_macros = NULL;
     }
+}
+
+int random_weighted(int values[], int weights[], int size) {
+
+    int total_weight = 0;
+    for (int i = 0; i < size; i++) {
+        total_weight += weights[i];
+    }
+
+    int rand_num = rand() % total_weight;
+
+    for (int i = 0; i < size; i++) {
+        if (rand_num < weights[i]) {
+            return values[i];
+        }
+        rand_num -= weights[i];
+    }
+
+    return -1;
 }
