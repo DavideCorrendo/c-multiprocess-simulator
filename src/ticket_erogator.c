@@ -73,29 +73,41 @@ int main() {
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
+    msg.mtype = 4;
 
     while(strcmp(msg.mtext, "end_simulation") != 0){
 
+
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
-        while(strcmp(msg.mtext, "end") != 0){
+
+        while(strcmp(msg.mtext, "end") != 0 && msg.num != -1){
 
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
+            //printf("[ticket er.] preso task %d\n", msg.num);
 
             if(msg.num == -1)break;
 
             msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
 
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, IPC_NOWAIT);
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
 
         }
 
         wait_semaphore(semid, shared_macros[1] + 1);
-        shared_macros[6]++;
+        puts("ticket_erogator finito");
+        shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
+        wait_semaphore(semid, shared_macros[1] + 3);
+
+        msg.mtext[0] = '\0';
+        msg.num = 0;
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
+
+        change_msg(&msgid);
+        printf("nuovo id %d\n", msgid);
 
     }
 
@@ -106,17 +118,20 @@ int main() {
 
 int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid){
 
-    int index_min;
+    int index_min = -1;
     int min = INT_MAX;
 
     for(int i = 0; i < shared_macros[1]; i++){
-        if(shared_seats[i].task == task){
+        wait_semaphore(semid, i);
+        //printf("cerco seat num %d busy = %d task = %d\n", i, (int)shared_seats[i].busy, shared_seats[i].task);
+        if(shared_seats[i].task == task && shared_seats[i].busy == true){
             int num = num_user_waiting(semid, shared_macros);
             if(min > num){
                 index_min = i;
                 min = num;
             }
         }
+        signal_semaphore(semid, i);
     }
     return index_min;
 }

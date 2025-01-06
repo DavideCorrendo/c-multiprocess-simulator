@@ -5,18 +5,18 @@
 
 #define MAX_LINE_LENGTH 100
 
-#define MAX_MSG_SIZE    500
+#define MAX_MSG_SIZE    20
 
 #define NUM_MACROS      100
 
 #define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
 
-#define N_NANO_SEC 1000000
+#define N_NANO_SEC 5000000
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 
-#define P_SERV_MIN 20 
-#define P_SERV_MAX 60
+#define P_SERV_MIN 80 
+#define P_SERV_MAX 50
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,6 +131,6 @@ void handle_termination(int sig);
 void cleanup(void);
 void initialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);
-
+void change_msg(int *msgid);
 
 #endif

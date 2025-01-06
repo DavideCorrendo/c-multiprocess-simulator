@@ -10,7 +10,7 @@ void tasks_assignment(int day);
 int reset_ipc(int semid, int num_sem);
 void cleanup();
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s);
-void wait_processes();
+void wait_processes(int day);
 
 
 static struct message msg;
@@ -106,7 +106,7 @@ void handle_termination(int sig) {
 
 void validate_inputs(int argc, char **argv) {
     if (argc != 6) {
-        fprintf(stderr, "Usage: %s <NOF_WORKERSEATS> <NOF_WORKERS> <NOF_USERS> <N_OF_PAUSE> <N_REQUEST>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <NOF_WORKERS> <NOF_WORKERSEAT> <NOF_USERS> <N_OF_PAUSE> <N_REQUEST>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     for (int i = 1; i < argc; i++) {
@@ -127,11 +127,8 @@ int main(int argc, char **argv) {
     int SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
     int explode_threshold = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
 
-    printf("%d\n", SIM_DURATION);
-    printf("%d\n", explode_threshold);
-
-    int NOF_WORKERSEATS = atoi(argv[1]);
-    int NOF_WORKERS = atoi(argv[2]);
+    int NOF_WORKERS = atoi(argv[1]);
+    int NOF_WORKERSEATS = atoi(argv[2]);
     int NOF_USERS = atoi(argv[3]);
     int N_OF_PAUSE = atoi(argv[4]);
     int N_REQUEST = atoi(argv[5]);
@@ -167,9 +164,7 @@ int main(int argc, char **argv) {
     shared_macros[6] = N_REQUEST;
     shared_macros[7] = NOF_USERS;
 
-    memset(&msg, 0, sizeof(struct message));
 
-    printf("%d\n", semid);
     for(int i = 0; i < shared_macros[1] + 3; i++){
         init_semaphore(semid, i, 1);
     }
@@ -184,12 +179,11 @@ int main(int argc, char **argv) {
     }
     add_child_pid(pid);
 
-    for(int i = 0; i < NOF_WORKERS; i++) {
+    for(int i = 1; i <= NOF_WORKERS; i++) {
         pid = fork();
         if (pid == 0) {
             char worker_id_str[32];
-            snprintf(worker_id_str, sizeof(worker_id_str), "%d", i + 1); 
-            add_child_pid(getpid());
+            snprintf(worker_id_str, sizeof(worker_id_str), "%d", i); 
             execv("./bin/worker", (char*[]){ "bin/worker", worker_id_str, NULL });
             perror("execv worker failed");
             raise(SIGTERM);
@@ -205,25 +199,33 @@ int main(int argc, char **argv) {
             perror("execv user failed");
             raise(SIGTERM);
         }
+        printf("user creato: %d\n", pid);
         add_child_pid(pid);
     }
 
     for(int i = 0; i < SIM_DURATION; i++){
+        init_semaphore(semid, shared_macros[1] + 3, 0);
         tasks_assignment(i); 
+        puts("task_assinment fatto");
         msg.mtype = 1;
         strcpy(msg.mtext, "start");
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0, "start"); 
         simulate_day();
         strcpy(msg.mtext, "end");
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0, "end");
+        puts("messaggi mandati");
         if(num_user_waiting(semid, shared_macros) >= explode_threshold){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        wait_processes();
+        wait_processes(i);
+        puts("wait_process finito");
         //print_stats(i);
-        send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end_simulation");
-        reset_ipc(semid, shared_macros[1] + 1);        
+        send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
+        puts("messaggi mandati");
+        sleep(1);
+        reset_ipc(semid, shared_macros[1] + 3);   
+        puts("reset fatto");     
     }
 
     send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "end_simulation");
@@ -316,8 +318,9 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
 void simulate_day() {
     
+    printf("%d\n", N_NANO_SEC);
     while(shared_macros[2] < 480){
-        usleep(N_NANO_SEC);
+        usleep(N_NANO_SEC / 1000);
         shared_macros[2]++;
     }
 
@@ -439,6 +442,7 @@ void print_stats(int day){
 
 void tasks_assignment(int day) {
     (void)day;
+    printf("value: %d\n", get_semaphore_value(semid, shared_macros[1]));
     for(int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i);
         shared_seats[i].task = i % 6;
@@ -448,19 +452,19 @@ void tasks_assignment(int day) {
 
 int reset_ipc(int semid, int num_sem) {
 
-    shared_macros[6] = 0;
+    shared_macros[5] = 0;
 
     union semun {
         int val;
         struct semid_ds *buf;
         unsigned short *array;
     } sem_union;
-    
+
     // Reset all semaphores to 0
     unsigned short *values = malloc(num_sem * sizeof(unsigned short));
 
     for (int i = 0; i < num_sem; i++) {
-        values[i] = 0;
+        values[i] = 1;
     }
     
     sem_union.array = values;
@@ -471,16 +475,39 @@ int reset_ipc(int semid, int num_sem) {
     shared_macros[2] = 0;
 
     free(values);
+
+    printf("id %d\n", msgid);
+
+    if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+        perror("Failed to remove message queue");
+        raise(SIGTERM);
+    }
+
+    key_t msg_key = ftok("/tmp", 'F');
+
+    if((msgid = msgget(msg_key, IPC_CREAT | 0666)) == -1){
+        perror("Failed to remake msg");
+        raise(SIGTERM);
+    }
+
+    printf("nuovo id %d\n", msgid);
+
+    for(int i = 0; i < shared_macros[0] + shared_macros[7] + 2; i++){
+        signal_semaphore(semid, shared_macros[1] + 3);
+    }
+
+
     return 0;
 }
 
 void cleanup(){
 
+sleep(1);
+
 if (child_pids != NULL) {
         for (int i = 0; i < num_children; i++) {
             if (child_pids[i] > 0) {
                 kill(child_pids[i], SIGTERM);
-                printf("%d killed\n", child_pids[i]);
             }
         }
         
@@ -521,18 +548,38 @@ if (child_pids != NULL) {
 
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s){
     strcpy(msg->mtext, s);
-    if(strcmp(s, "end") == 0)msg->num = -1;
-    msg->mtype = type;
-    for(int i = 0; i < shared_macros[8] + shared_macros[0] + 1; i++){
+
+    if(strcmp(s, "end") == 0){
+        msg->num = -1;
+        msg->mtype = 4;
         msgsnd(msgid, msg, size, flag);
+        
+
+        for(int i = 0; i < shared_macros[1]; i++){
+            msg->mtype = 6 + i;
+            msgsnd(msgid, msg, size, flag);printf("mandato tipo %d\n", type);
+        }
+    }
+
+    msg->mtype = type;
+    for(int i = 0; i < shared_macros[0] + shared_macros[7] + 1; i++){
+        msgsnd(msgid, msg, size, flag);printf("mandato tipo %d\n", type);
     }
 }
 
-void wait_processes(){
+void wait_processes(int day){
+
+
+    (void)day;
+
+    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
 
     while(1){
-        if(shared_macros[6] == shared_macros[8] + shared_macros[0] + 1)break;
-        usleep(350);
+        if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1)break;
+        printf("%d\n", shared_macros[5]);
+        sleep(1);
     }
+
+    puts("fine");
 
 }

@@ -36,3 +36,4 @@ semaphores: the first shared_macros[1] semaphores are for the seats, then 1 for 
 --> 1 for stats
 --> 1 for macros
 --> 1 for ticket
+--> 1 for waiting processes

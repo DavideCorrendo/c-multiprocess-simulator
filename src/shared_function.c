@@ -129,3 +129,12 @@ void initialize_keys_modified(key_t *shm_macros_key, key_t *sem_key, key_t *msg_
     }
 }
 
+void change_msg(int *msgid){
+    key_t msg_key = ftok("/tmp", 'F');
+
+    if((*msgid = msgget(msg_key, 0)) == -1){
+        perror("Failed to remake msg");
+        raise(SIGTERM);
+    }
+}
+
