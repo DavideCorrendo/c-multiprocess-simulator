@@ -121,7 +121,6 @@ int main() {
                 num_task--;
             }
 
-            puts("user finito");
             wait_semaphore(semid, shared_macros[1] + 1);
             shared_macros[5]++;
             signal_semaphore(semid, shared_macros[1] + 1);
@@ -131,10 +130,11 @@ int main() {
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
             change_msg(&msgid);
-            printf("nuovo id %d\n", msgid);
         }
     
+    reset_signals_to_default();
     cleanup_resources(shared_macros, shared_seats);
+    sleep(10);
     return 1;
 }
 void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day) {

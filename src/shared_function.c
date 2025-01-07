@@ -138,3 +138,11 @@ void change_msg(int *msgid){
     }
 }
 
+void reset_signals_to_default() {
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGCHLD, SIG_DFL);
+    signal(SIGHUP, SIG_DFL);
+}
+

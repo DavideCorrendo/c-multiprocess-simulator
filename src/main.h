@@ -132,5 +132,6 @@ void cleanup(void);
 void initialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);
 void change_msg(int *msgid);
+void reset_signals_to_default();
 
 #endif

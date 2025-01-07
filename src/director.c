@@ -68,6 +68,11 @@ void setup_signal_handlers() {
         perror("sigaction SIGSEGV failed");
         exit(EXIT_FAILURE);
     }
+
+    if (sigaction(SIGHUP, &sa, NULL) == -1) {
+        perror("sigaction SIGHUP failed");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void handle_child_exit(int sig) {
@@ -91,6 +96,7 @@ void handle_child_exit(int sig) {
     }
     
     errno = saved_errno;  // Restore errno
+    reset_signals_to_default();
     cleanup();
     exit(EXIT_FAILURE);
 }
@@ -202,7 +208,7 @@ int main(int argc, char **argv) {
         printf("user creato: %d\n", pid);
         add_child_pid(pid);
     }
-
+    //<-----------------------USER IN CODA DA GESTIRE----------------------------->
     for(int i = 0; i < SIM_DURATION; i++){
         init_semaphore(semid, shared_macros[1] + 3, 0);
         tasks_assignment(i); 
@@ -228,10 +234,12 @@ int main(int argc, char **argv) {
         puts("reset fatto");     
     }
 
+    puts("FINITO TUTTO");
     send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "end_simulation");
 
-    sleep(1);
-
+    reset_signals_to_default();
+    puts("resettato");
+    sleep(2);
     cleanup();
 
     printf("Simulation completed successfully\n");
@@ -318,7 +326,6 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
 void simulate_day() {
     
-    printf("%d\n", N_NANO_SEC);
     while(shared_macros[2] < 480){
         usleep(N_NANO_SEC / 1000);
         shared_macros[2]++;
@@ -442,7 +449,6 @@ void print_stats(int day){
 
 void tasks_assignment(int day) {
     (void)day;
-    printf("value: %d\n", get_semaphore_value(semid, shared_macros[1]));
     for(int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i);
         shared_seats[i].task = i % 6;
@@ -476,8 +482,6 @@ int reset_ipc(int semid, int num_sem) {
 
     free(values);
 
-    printf("id %d\n", msgid);
-
     if (msgctl(msgid, IPC_RMID, NULL) == -1) {
         perror("Failed to remove message queue");
         raise(SIGTERM);
@@ -490,8 +494,6 @@ int reset_ipc(int semid, int num_sem) {
         raise(SIGTERM);
     }
 
-    printf("nuovo id %d\n", msgid);
-
     for(int i = 0; i < shared_macros[0] + shared_macros[7] + 2; i++){
         signal_semaphore(semid, shared_macros[1] + 3);
     }
@@ -502,7 +504,6 @@ int reset_ipc(int semid, int num_sem) {
 
 void cleanup(){
 
-sleep(1);
 
 if (child_pids != NULL) {
         for (int i = 0; i < num_children; i++) {
@@ -557,13 +558,13 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
 
         for(int i = 0; i < shared_macros[1]; i++){
             msg->mtype = 6 + i;
-            msgsnd(msgid, msg, size, flag);printf("mandato tipo %d\n", type);
+            msgsnd(msgid, msg, size, flag);
         }
     }
 
     msg->mtype = type;
     for(int i = 0; i < shared_macros[0] + shared_macros[7] + 1; i++){
-        msgsnd(msgid, msg, size, flag);printf("mandato tipo %d\n", type);
+        msgsnd(msgid, msg, size, flag);
     }
 }
 
@@ -576,10 +577,7 @@ void wait_processes(int day){
 
     while(1){
         if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1)break;
-        printf("%d\n", shared_macros[5]);
         sleep(1);
     }
-
-    puts("fine");
 
 }

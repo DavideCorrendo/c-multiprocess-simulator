@@ -143,7 +143,6 @@ int main(int argc, char *argv[]) {
         if(end == false)working_time(task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, day, seat_num);
 
         wait_semaphore(semid, shared_macros[1] + 1);
-        puts("worker finito");
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
         wait_semaphore(semid, shared_macros[1] + 3);
@@ -153,11 +152,12 @@ int main(int argc, char *argv[]) {
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
         change_msg(&msgid);
-        printf("nuovo id %d\n", msgid);
 
     }
 
+    reset_signals_to_default();
     cleanup_resources();
+    sleep(10);
     exit(EXIT_SUCCESS);
 }
 

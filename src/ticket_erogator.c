@@ -46,7 +46,6 @@ int main() {
     key_t msg_key;
 
     initialize_keys_modified(&shm_macros_key, &sem_key, &msg_key, &shm_seats_key);
-    printf("%d\n", msg_key);
     int msgid = msgget(msg_key, 0);
     if(msgid == -1) {
         perror("msgget in ticket");
@@ -96,7 +95,6 @@ int main() {
         }
 
         wait_semaphore(semid, shared_macros[1] + 1);
-        puts("ticket_erogator finito");
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
         wait_semaphore(semid, shared_macros[1] + 3);
@@ -107,11 +105,12 @@ int main() {
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
         change_msg(&msgid);
-        printf("nuovo id %d\n", msgid);
 
     }
 
+    reset_signals_to_default();
     cleanup_resources(shared_macros, shared_seats);
+    sleep(10);
     return EXIT_SUCCESS;
 
 }
