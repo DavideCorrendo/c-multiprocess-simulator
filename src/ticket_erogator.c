@@ -78,6 +78,8 @@ int main() {
 
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+        puts("ticket iniziato");
+        //printf("[ticket er.] %d\n", msg.num);
 
 
         while(strcmp(msg.mtext, "end") != 0 && msg.num != -1){
@@ -89,12 +91,14 @@ int main() {
 
             msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
+            msg.num = 0;
 
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
 
         }
 
         wait_semaphore(semid, shared_macros[1] + 1);
+        puts("ticket_erogator finito");
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
         wait_semaphore(semid, shared_macros[1] + 3);

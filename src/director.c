@@ -11,6 +11,7 @@ int reset_ipc(int semid, int num_sem);
 void cleanup();
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s);
 void wait_processes(int day);
+FILE *fp;
 
 
 static struct message msg;
@@ -26,6 +27,7 @@ static worker_seat *shared_seats = NULL;
 static int *shared_macros = NULL;
 static pid_t *child_pids;
 static int num_children = 0;
+FILE *fp;
 
 void add_child_pid(pid_t pid) {
     num_children++;
@@ -208,6 +210,13 @@ int main(int argc, char **argv) {
         printf("user creato: %d\n", pid);
         add_child_pid(pid);
     }
+
+    fp = fopen("stats.csv", "a");
+    if (fp == NULL) {
+        perror("Error opening stats.csv");
+        raise(SIGTERM);
+    }
+
     //<-----------------------USER IN CODA DA GESTIRE----------------------------->
     for(int i = 0; i < SIM_DURATION; i++){
         init_semaphore(semid, shared_macros[1] + 3, 0);
@@ -226,10 +235,9 @@ int main(int argc, char **argv) {
         } 
         wait_processes(i);
         puts("wait_process finito");
-        //print_stats(i);
+        print_stats(i);
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
         puts("messaggi mandati");
-        sleep(1);
         reset_ipc(semid, shared_macros[1] + 3);   
         puts("reset fatto");     
     }
@@ -335,6 +343,8 @@ void simulate_day() {
 }
 
 void print_stats(int day){
+    (void) day;
+
     printf("\n\n-----------------------DAY %d-----------------------\n\n", day);
     printf("total number of user served: %d\n", shared_tot_stats->num_user_served);
     printf("average number of users served per worker: %.2f\n", shared_daily_stats[day].avg_num_users_daily);
@@ -368,13 +378,6 @@ void print_stats(int day){
     
     for(int i = 0; i < shared_macros[1]; i++){
         printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
-    }
-
-    FILE *fp;
-    fp = fopen("stats.csv", "a");
-    if (fp == NULL) {
-        perror("Error opening stats.csv");
-        return;
     }
 
     fprintf(fp, "Timestamp,Day,Total Users Served,Avg Users Per Worker,Total Services Done,Total Services Not Done,"
@@ -444,7 +447,6 @@ void print_stats(int day){
     }
     fprintf(fp, "\n");
 
-    fclose(fp);
 }
 
 void tasks_assignment(int day) {
@@ -488,6 +490,10 @@ int reset_ipc(int semid, int num_sem) {
     }
 
     key_t msg_key = ftok("/tmp", 'F');
+    if(msg_key == -1){
+        perror("errore nella ftok");
+        raise(SIGTERM);
+    }
 
     if((msgid = msgget(msg_key, IPC_CREAT | 0666)) == -1){
         perror("Failed to remake msg");
@@ -497,6 +503,8 @@ int reset_ipc(int semid, int num_sem) {
     for(int i = 0; i < shared_macros[0] + shared_macros[7] + 2; i++){
         signal_semaphore(semid, shared_macros[1] + 3);
     }
+
+    printf("\n\n\n\n\nSEMAFORO VALE %d\n", get_semaphore_value(semid, shared_macros[1] + 3));
 
 
     return 0;
@@ -545,6 +553,10 @@ if (child_pids != NULL) {
 
     msgctl(msgid, IPC_RMID, NULL);
     semctl(semid, 0, IPC_RMID);
+
+    if (fp != NULL) {
+    fclose(fp);
+    }
 }
 
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s){
@@ -560,6 +572,8 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
             msg->mtype = 6 + i;
             msgsnd(msgid, msg, size, flag);
         }
+    }else{
+        msg->num = 0;
     }
 
     msg->mtype = type;
@@ -577,6 +591,7 @@ void wait_processes(int day){
 
     while(1){
         if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1)break;
+        printf("%d\n", shared_macros[5]);
         sleep(1);
     }
 

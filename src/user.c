@@ -104,6 +104,7 @@ int main() {
             int time = rand() % 480;
             end_day = false;
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+            puts("user iniziato");
             usleep((time * N_NANO_SEC) / 1000);
             
 
@@ -122,6 +123,7 @@ int main() {
             }
 
             wait_semaphore(semid, shared_macros[1] + 1);
+            puts("user finito");
             shared_macros[5]++;
             signal_semaphore(semid, shared_macros[1] + 1);
             wait_semaphore(semid, shared_macros[1] + 3);

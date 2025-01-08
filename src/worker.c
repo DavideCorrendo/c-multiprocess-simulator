@@ -133,6 +133,7 @@ int main(int argc, char *argv[]) {
     while(strcmp(msg.mtext, "end_simulation") != 0){
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+        puts("worker iniziato");
         end = false;
 
         while (!find_seat(task, id_worker, semid, &seat_num) && end == false) {
@@ -143,12 +144,12 @@ int main(int argc, char *argv[]) {
         if(end == false)working_time(task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, day, seat_num);
 
         wait_semaphore(semid, shared_macros[1] + 1);
+        puts("worker finito");
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
         wait_semaphore(semid, shared_macros[1] + 3);
         msg.mtext[0] = '\0';
         msg.num = 0;
-
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
         change_msg(&msgid);
