@@ -207,7 +207,6 @@ int main(int argc, char **argv) {
             perror("execv user failed");
             raise(SIGTERM);
         }
-        printf("user creato: %d\n", pid);
         add_child_pid(pid);
     }
 
@@ -244,6 +243,8 @@ int main(int argc, char **argv) {
 
     puts("FINITO TUTTO");
     send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "end_simulation");
+
+    //print_file();
 
     reset_signals_to_default();
     puts("resettato");
@@ -339,7 +340,6 @@ void simulate_day() {
         shared_macros[2]++;
     }
 
-    printf("Simulation complete: A full day has passed in simulated time.\n");
 }
 
 void print_stats(int day){
@@ -379,73 +379,6 @@ void print_stats(int day){
     for(int i = 0; i < shared_macros[1]; i++){
         printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
     }
-
-    fprintf(fp, "Timestamp,Day,Total Users Served,Avg Users Per Worker,Total Services Done,Total Services Not Done,"
-                "Avg Services Done,Avg Services Not Done,Total Avg Wait Time,Daily Avg Wait Time,"
-                "Total Avg Service Time,Daily Avg Service Time");
-        
-    for (int i = 0; i < 6; i++) {
-        fprintf(fp, ",Service %d Users,Service %d Avg Users Per Worker,Service %d Tasks Done,"
-            "Service %d Tasks Not Done,Service %d Avg Tasks Done,Service %d Avg Tasks Not Done,"
-            "Service %d Avg Wait Time,Service %d Daily Wait Time,"
-            "Service %d Avg Service Time,Service %d Daily Service Time",
-            i, i, i, i, i, i, i, i, i, i);
-    }
-
-    fprintf(fp, ",Active Users Simulation,Active Users Daily,Avg Daily Pauses,Total Pauses");
-        
-        for (int i = 0; i < shared_macros[1]; i++) {
-            fprintf(fp, ",Worker-Seat Ratio %d", i);
-        }
-        fprintf(fp, "\n");
-
-    time_t now;
-    char timestamp[26];
-    time(&now);
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
-
-    // Write data row
-    fprintf(fp, "%s,%d,%d,%.2f,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-            timestamp,
-            day,
-            shared_tot_stats->num_user_served,
-            shared_daily_stats[day].avg_num_users_daily,
-            shared_tot_stats->num_task_done,
-            shared_tot_stats->num_task_not_done,
-            shared_daily_stats[day].avg_num_tasks_done_daily,
-            shared_daily_stats[day].avg_num_tasks_not_done_daily,
-            shared_tot_stats->avg_time_wait,
-            shared_daily_stats[day].avg_time_users_wait_daily,
-            shared_tot_stats->avg_time_task,
-            shared_daily_stats[day].avg_time_tasks_done_daily);
-
-    // Write per-service stats
-    for (int i = 0; i < 6; i++) {
-        fprintf(fp, ",%d,%.2f,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-                shared_tot_stats->num_user_served_per_task[i],
-                shared_daily_stats[day].avg_num_users_daily_per_task[i],
-                shared_tot_stats->num_task_done_per_task[i],
-                shared_tot_stats->num_task_not_done_per_task[i],
-                shared_daily_stats[day].avg_num_tasks_done_daily_per_task[i],
-                shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[i],
-                shared_tot_stats->avg_time_wait_per_task[i],
-                shared_daily_stats[day].avg_time_users_wait_daily_per_task[i],
-                shared_tot_stats->avg_time_task_per_task[i],
-                shared_daily_stats[day].avg_time_tasks_done_daily_per_task[i]);
-    }
-
-    // Write worker stats
-    fprintf(fp, ",%d,%d,%.2f,%d",
-            shared_daily_stats[day].num_workers_active_daily,
-            shared_tot_stats->num_worker_active,
-            shared_daily_stats[day].avg_num_pause_daily,
-            shared_tot_stats->num_pause);
-
-    // Write worker-seat ratios
-    for (int i = 0; i < shared_macros[1]; i++) {
-        fprintf(fp, ",%.2f", shared_daily_stats[day].num_ratio_worker_user[i]);
-    }
-    fprintf(fp, "\n");
 
 }
 
@@ -504,7 +437,6 @@ int reset_ipc(int semid, int num_sem) {
         signal_semaphore(semid, shared_macros[1] + 3);
     }
 
-    printf("\n\n\n\n\nSEMAFORO VALE %d\n", get_semaphore_value(semid, shared_macros[1] + 3));
 
 
     return 0;
@@ -587,11 +519,10 @@ void wait_processes(int day){
 
     (void)day;
 
-    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
+    //printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
 
     while(1){
         if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1)break;
-        printf("%d\n", shared_macros[5]);
         sleep(1);
     }
 

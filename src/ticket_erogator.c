@@ -78,7 +78,6 @@ int main() {
 
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
-        puts("ticket iniziato");
         //printf("[ticket er.] %d\n", msg.num);
 
 
@@ -98,7 +97,6 @@ int main() {
         }
 
         wait_semaphore(semid, shared_macros[1] + 1);
-        puts("ticket_erogator finito");
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
         wait_semaphore(semid, shared_macros[1] + 3);
