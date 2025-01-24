@@ -335,7 +335,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
 void simulate_day() {
     
-    while(shared_macros[2] < 720){
+    while(shared_macros[2] < 1440){
         usleep(N_NANO_SEC / 1000);
         shared_macros[2]++;
     }

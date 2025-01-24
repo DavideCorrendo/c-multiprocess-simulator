@@ -11,7 +11,7 @@
 
 #define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
 
-#define N_NANO_SEC 5000000
+#define N_NANO_SEC 10000000
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 

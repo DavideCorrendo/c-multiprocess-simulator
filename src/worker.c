@@ -1,7 +1,7 @@
 #include "main.h"
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
-void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day, int seat_num);
+void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
 void update_stats(int day, int task, int task_time, bool pause, int wait_time);
 int worker_per_task(int task);
 float ratio_worker_seats(int index);
@@ -138,9 +138,9 @@ int main(int argc, char *argv[]) {
         while (!find_seat(task, id_worker, semid, &seat_num) && end == false) {
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
             if(strcmp(msg.mtext, "end") == 0){end = true; break;}
-            usleep(N_NANO_SEC / 1000);
+            usleep((N_NANO_SEC * 10) / 1000);
         }
-        if(end == false)working_time(task, time_tasks[task], id_worker, &msg, msgid, semid, pause_counter, day, seat_num);
+        if(end == false)working_time(task, time_tasks[task], seat_num, &msg, msgid, semid, pause_counter, day);
 
         wait_semaphore(semid, shared_macros[1] + 1);
         shared_macros[5]++;
@@ -148,6 +148,7 @@ int main(int argc, char *argv[]) {
         wait_semaphore(semid, shared_macros[1] + 3);
         msg.mtext[0] = '\0';
         msg.num = 0;
+        end = false;
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
         change_msg(&msgid);
@@ -160,14 +161,13 @@ int main(int argc, char *argv[]) {
     exit(EXIT_SUCCESS);
 }
 
-void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day, int seat_num) {
-    char s[10] = "done";
+void working_time(int task, int avg_time_task, int seat_num, struct message *msg, int msgid, int semid, int pause_counter, int day) {
 
     bool pause = false;
     int user_served = 0, time_task_count = 0, wait_time = 0;
 
     while (strcmp(msg->mtext, "end") != 0 && !pause) {
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 5 + id_worker, 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
         if(msg->num == -1)break;
         wait_time += msg->num;
 
@@ -175,8 +175,8 @@ void working_time(int task, int avg_time_task, int id_worker, struct message *ms
         time_task *= (float)avg_time_task;
         usleep((time_task * N_NANO_SEC) / 1000);
 
-        strcpy(msg->mtext, s);
-        msg->mtype = 5 + id_worker;
+        strcpy(msg->mtext, "done");
+        msg->mtype = 6 + seat_num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;

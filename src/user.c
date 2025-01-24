@@ -192,22 +192,27 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
 
         msg->num = tasks[i];
         wait_semaphore(semid, shared_macros[1] + 2);
+        printf("[user %d] qui\n", getpid());
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        printf("[user %d] messaggio mandato\n", getpid());
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 4, 0);
+        printf("[user %d] qua\n", getpid());
         signal_semaphore(semid, shared_macros[1] + 2);
         if(msg->num == -1){
-            printf("ricevuto -1 aspettando %d\n", tasks[i]);
+            printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
             continue;
         }
         
         seat_num = msg->num;
         msg->mtype = 6 + seat_num;
         msg->num = tasks[i];
-        printf("RICEVUTA SEDIA %d\n", seat_num);
+        printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
         
         wait_semaphore(semid, seat_num);
+        printf("[user %d] quo\n", getpid());
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        //msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
+        printf("[user %d] que\n", getpid());
         //printf("[user] mandato num %d a sedia %d\n", msg->num, seat_num);
         signal_semaphore(semid, seat_num);
 
