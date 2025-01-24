@@ -72,14 +72,10 @@ int main() {
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
-    msg.mtype = 4;
-
     while(strcmp(msg.mtext, "end_simulation") != 0){
 
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
-        //printf("[ticket er.] %d\n", msg.num);
-
 
         while(strcmp(msg.mtext, "end") != 0 && msg.num != -1){
 
@@ -87,8 +83,11 @@ int main() {
             //printf("[ticket er.] preso task %d\n", msg.num);
 
             if(msg.num == -1)break;
+            msg.mtype = 4;
 
             msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
+            //if(msg.num != -1)printf("OCCUPATO E %d\n", shared_seats[msg.num].busy);
+            //printf("EROGATOR MANDA %d\n", msg.num);
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
             msg.num = 0;
 
@@ -124,9 +123,10 @@ int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int sem
 
     for(int i = 0; i < shared_macros[1]; i++){
         wait_semaphore(semid, i);
+        //printf("OCCUPATO DI %d È %d\n", i, shared_seats[i].busy);
         //printf("cerco seat num %d busy = %d task = %d\n", i, (int)shared_seats[i].busy, shared_seats[i].task);
         if(shared_seats[i].task == task && shared_seats[i].busy == true){
-            int num = num_user_waiting(semid, shared_macros);
+            int num = get_semaphore_value(semid, i);
             if(min > num){
                 index_min = i;
                 min = num;
@@ -147,3 +147,4 @@ void cleanup_resources() {
         shared_macros = NULL;
     }
 }
+

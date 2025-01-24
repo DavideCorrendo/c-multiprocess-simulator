@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
         } 
         wait_processes(i);
         puts("wait_process finito");
-        print_stats(i);
+        //print_stats(i);
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
         puts("messaggi mandati");
         reset_ipc(semid, shared_macros[1] + 3);   
@@ -335,7 +335,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
 void simulate_day() {
     
-    while(shared_macros[2] < 480){
+    while(shared_macros[2] < 720){
         usleep(N_NANO_SEC / 1000);
         shared_macros[2]++;
     }
@@ -497,8 +497,9 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
     if(strcmp(s, "end") == 0){
         msg->num = -1;
         msg->mtype = 4;
-        msgsnd(msgid, msg, size, flag);
-        
+        for(int i = 0; i <= shared_macros[7]; i++){
+            msgsnd(msgid, msg, size, flag);
+        }
 
         for(int i = 0; i < shared_macros[1]; i++){
             msg->mtype = 6 + i;

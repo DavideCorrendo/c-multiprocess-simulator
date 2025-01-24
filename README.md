@@ -15,11 +15,11 @@ messages queue:
 3 = ticket_erogator <---> director
 4 = ticket_erogator <---> user
 5 = end simulation
-6 = first worker
+6 = first workerseat
 .
 .
 .
-5 + shared_macros[0] = last worker
+5 + shared_macros[1] = last worker
 
 shared_macros:
 0 = number of worker

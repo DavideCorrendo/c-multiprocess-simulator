@@ -11,7 +11,7 @@ static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
 static int *shared_macros = NULL;
 
-void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day);
+void office_time(struct message *msg, int msgid, int tasks[], int semid, int shared_macros[], int *remaining_task, int num_task, bool tasks_done[]);
 void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, int seat_num, bool *end_day);
 void cleanup_resources();
 int random_weighted(int values[], int weights[], int size);
@@ -116,8 +116,6 @@ int main() {
         raise(SIGTERM);
     }
 
-    bool end_day;
-
     srand(time(NULL) + getpid());
 
     //int values[] = {0, 1, 2, 3, 4, 5};
@@ -144,26 +142,20 @@ int main() {
                 tasks[i] = rand() % 6;
                 tasks_done[i] = false;
             }
-            int time = rand() % 480;
-            end_day = false;
+            //int time = rand() % 480;
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
-            usleep((time * N_NANO_SEC) / 1000);
+            //usleep((time * N_NANO_SEC) / 1000);
             
-            while(decision <= P_SERV && !end_day && remaining_task > 0){
-                //printf("[user] task decisa %d\n", task);
-
-                for(int i = 0; i < num_task && !end_day; i++){
-                    office_time(msg, tasks[day], msgid, semid, shared_macros, shared_seats, &end_day);
-                    if(!end_day)tasks_done[i] = true;
+            if(decision <= P_SERV){
+                printf("[user] num_task: %d\n", num_task);
+                for(int i = 0; i < num_task; i++){
+                    printf("[user] tasks[%d]: %d\n", i, tasks[i]);
                 }
-                
-                if(end_day)break;
 
-                msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
-                if(strcmp(msg.mtext, "end") == 0)break;
-
-                remaining_task--;
+                office_time(&msg, msgid, tasks, semid, shared_macros, &remaining_task, num_task, tasks_done);
             }
+
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
 
             wait_semaphore(semid, shared_macros[1]);
             update_stats(num_task, remaining_task, day, tasks, tasks_done);
@@ -174,7 +166,6 @@ int main() {
             signal_semaphore(semid, shared_macros[1] + 1);
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
-            end_day = false;
 
             day++;
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
@@ -187,41 +178,44 @@ int main() {
     sleep(10);
     return 1;
 }
-void office_time(struct message msg, int task, int msgid, int semid, int *shared_macros, worker_seat *shared_seats, bool *end_day) {
-    msg.mtype = 4;
-    msg.num = task;
-    wait_semaphore(semid, shared_macros[1] + 2);
-    //printf("[user] preso controllo del ticket erogator %d\n", msg.num);
-    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
-    //printf("ticket ricevuto %d\n", msg.num);
-    signal_semaphore(semid, shared_macros[1] + 2);
-    if(msg.num == -1) {
-        *end_day = true;
-        return;
-    }
-    int seat_num = msg.num;
-
-    task_time(msg, msgid, semid, shared_macros, shared_seats[seat_num].worker_id, seat_num, end_day);
-
-}
-
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, int seat_num, bool *end_day) {
-    int start_time = shared_macros[2];
-    wait_semaphore(semid, seat_num);
-    msg.mtype = 5 + worker_id;
-    msg.num = shared_macros[2] - start_time;
-
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
-    if(strcmp(msg.mtext, "end") == 0){
-        *end_day = true;
-        msg.num = -1;
-    }
+void office_time(struct message *msg, int msgid, int tasks[], int semid, int shared_macros[], int *remaining_task, int num_task, bool tasks_done[]) {
     
-    msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
-    if(*end_day)msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long),  5 + worker_id, 0);
+    msg->mtype = 4; 
+    int seat_num;
 
-    signal_semaphore(semid, seat_num);
+    for(int i = 0; i < num_task; i++){
+        printf("taks[%d] = %d\n", i, tasks[i]);
+
+        for(int j = 0; j < shared_macros[1]; j++){
+            printf("%d OCCUPATO È %d\n", j, shared_seats[j].busy);
+        }
+
+        msg->num = tasks[i];
+        wait_semaphore(semid, shared_macros[1] + 2);
+        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 4, 0);
+        signal_semaphore(semid, shared_macros[1] + 2);
+        if(msg->num == -1){
+            printf("ricevuto -1 aspettando %d\n", tasks[i]);
+            continue;
+        }
+        
+        seat_num = msg->num;
+        msg->mtype = 6 + seat_num;
+        msg->num = tasks[i];
+        printf("RICEVUTA SEDIA %d\n", seat_num);
+        
+        wait_semaphore(semid, seat_num);
+        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        //msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
+        //printf("[user] mandato num %d a sedia %d\n", msg->num, seat_num);
+        signal_semaphore(semid, seat_num);
+
+        if(strcmp(msg->mtext, "end") == 0)return;
+        tasks_done[i] = true;
+        (*remaining_task)--;
+    }
+
 }
 
 void cleanup_resources() {
