@@ -78,26 +78,27 @@ int main() {
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
         while(strcmp(msg.mtext, "end") != 0 && msg.num != -1){
-
+            //puts("ASPETTO");
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
             //printf("[ticket er.] preso task %d\n", msg.num);
 
             if(msg.num == -1)break;
             msg.mtype = 4;
-
             msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
-            //if(msg.num != -1)printf("OCCUPATO E %d\n", shared_seats[msg.num].busy);
+            //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
-            msg.num = 0;
-
+            
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
+
+            msg.num = 0;
 
         }
 
         wait_semaphore(semid, shared_macros[1] + 1);
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
+        
         wait_semaphore(semid, shared_macros[1] + 3);
 
         msg.mtext[0] = '\0';
@@ -117,24 +118,22 @@ int main() {
 }
 
 int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid){
+    int min_users = INT_MAX;
+    int min_index = -1;
 
-    int index_min = -1;
-    int min = INT_MAX;
-
-    for(int i = 0; i < shared_macros[1]; i++){
-        wait_semaphore(semid, i);
-        //printf("OCCUPATO DI %d È %d\n", i, shared_seats[i].busy);
-        //printf("cerco seat num %d busy = %d task = %d\n", i, (int)shared_seats[i].busy, shared_seats[i].task);
-        if(shared_seats[i].task == task && shared_seats[i].busy == true){
-            int num = get_semaphore_value(semid, i);
-            if(min > num){
-                index_min = i;
-                min = num;
+    for (int i = 0; i < shared_macros[1]; i++) {
+        wait_semaphore(semid, i); // Lock seat's data
+        if (shared_seats[i].busy && shared_seats[i].task == task) {
+            int users_waiting = get_semaphore_value(semid, shared_seats[i].id);
+            if (users_waiting < min_users) {
+                min_users = users_waiting;
+                min_index = i;
             }
         }
-        signal_semaphore(semid, i);
+        signal_semaphore(semid, i); // Unlock seat's data
     }
-    return index_min;
+
+    return min_index;
 }
 
 void cleanup_resources() {

@@ -30,6 +30,7 @@ shared_macros:
 5 = NUM_PROCESS_FINISHED
 6 = N_REQUESTS
 7 = NOF_USER
+8 = current_day
 
 semaphores: the first shared_macros[1] semaphores are for the seats, then 1 for shared_stats
 --> shared_macros[1] for seats

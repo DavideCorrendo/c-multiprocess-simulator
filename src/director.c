@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     for(int i = 0; i < SIM_DURATION; i++) {
         memset(&shared_daily_stats[i], 0, sizeof(daily_stats));
         for(int j = 0; j < shared_macros[1]; j++) {
-            shared_daily_stats[i].num_ratio_worker_user[j] = 0.0;
+            shared_tot_stats->num_ratio_worker_user[j] = 0.0;
         }
     }
 
@@ -171,6 +171,7 @@ int main(int argc, char **argv) {
     shared_macros[5] = 0;
     shared_macros[6] = N_REQUEST;
     shared_macros[7] = NOF_USERS;
+    shared_macros[8] = 0;
 
 
     for(int i = 0; i < shared_macros[1] + 3; i++){
@@ -217,9 +218,9 @@ int main(int argc, char **argv) {
     }
 
     //<-----------------------USER IN CODA DA GESTIRE----------------------------->
-    for(int i = 0; i < SIM_DURATION; i++){
+    for(; shared_macros[8] < SIM_DURATION; shared_macros[8]++){
         init_semaphore(semid, shared_macros[1] + 3, 0);
-        tasks_assignment(i); 
+        tasks_assignment(shared_macros[8]); 
         puts("task_assinment fatto");
         msg.mtype = 1;
         strcpy(msg.mtext, "start");
@@ -232,9 +233,9 @@ int main(int argc, char **argv) {
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        wait_processes(i);
+        wait_processes(shared_macros[8]);
         puts("wait_process finito");
-        //print_stats(i);
+        print_stats(shared_macros[8]);
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
         puts("messaggi mandati");
         reset_ipc(semid, shared_macros[1] + 3);   
@@ -335,7 +336,7 @@ void initialization_shm(int *shmid_daily_stats, int *shmid_tot_stats, int *shmid
 
 void simulate_day() {
     
-    while(shared_macros[2] < 1440){
+    while(shared_macros[2] < 720){
         usleep(N_NANO_SEC / 1000);
         shared_macros[2]++;
     }
@@ -377,7 +378,7 @@ void print_stats(int day){
     printf("number of pause during simulation: %d\n", shared_tot_stats->num_pause);
     
     for(int i = 0; i < shared_macros[1]; i++){
-        printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
+        printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_tot_stats->num_ratio_worker_user[i]);
     }
 
 }

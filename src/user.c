@@ -118,10 +118,10 @@ int main() {
 
     srand(time(NULL) + getpid());
 
-    //int values[] = {0, 1, 2, 3, 4, 5};
-    //int weights[] = {50, 20, 15, 10, 4, 1};
-    //int size_r = sizeof(values) / sizeof(values[0]);
-    int day = 0;
+    int values[] = {0, 1, 2, 3, 4, 5};
+    int weights[] = {50, 20, 15, 10, 4, 1};
+    int size_r = sizeof(values) / sizeof(values[0]);
+    int day;
 
 
     //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
@@ -139,27 +139,27 @@ int main() {
             int *tasks = malloc(num_task * sizeof(int));
             bool *tasks_done = malloc(num_task * sizeof(bool));
             for(int i = 0; i < num_task; i++){
-                tasks[i] = rand() % 6;
+                tasks[i] = random_weighted(values, weights, size_r);
                 tasks_done[i] = false;
             }
-            //int time = rand() % 480;
+            int time = rand() % 480;
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
-            //usleep((time * N_NANO_SEC) / 1000);
+            usleep((time * N_NANO_SEC) / 1000);
             
             if(decision <= P_SERV){
-                printf("[user] num_task: %d\n", num_task);
+                /*printf("[user %d] num_task: %d\n", getpid(), num_task);
                 for(int i = 0; i < num_task; i++){
-                    printf("[user] tasks[%d]: %d\n", i, tasks[i]);
-                }
+                    printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
+                }*/
+                day = shared_macros[8]; 
 
                 office_time(&msg, msgid, tasks, semid, shared_macros, &remaining_task, num_task, tasks_done);
+                wait_semaphore(semid, shared_macros[1]);
+                update_stats(num_task, remaining_task, day, tasks, tasks_done);
+                signal_semaphore(semid, shared_macros[1]);
             }
 
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
-
-            wait_semaphore(semid, shared_macros[1]);
-            update_stats(num_task, remaining_task, day, tasks, tasks_done);
-            signal_semaphore(semid, shared_macros[1]);
 
             wait_semaphore(semid, shared_macros[1] + 1);
             shared_macros[5]++;
@@ -167,7 +167,6 @@ int main() {
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
 
-            day++;
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
 
             change_msg(&msgid);
@@ -178,42 +177,42 @@ int main() {
     sleep(10);
     return 1;
 }
+
 void office_time(struct message *msg, int msgid, int tasks[], int semid, int shared_macros[], int *remaining_task, int num_task, bool tasks_done[]) {
     
     msg->mtype = 4; 
     int seat_num;
 
     for(int i = 0; i < num_task; i++){
-        printf("taks[%d] = %d\n", i, tasks[i]);
+
+        msg->mtype = 4;
+
+        /*printf("[user %d] taks[%d] = %d\n", getpid(), i, tasks[i]);
 
         for(int j = 0; j < shared_macros[1]; j++){
-            printf("%d OCCUPATO È %d\n", j, shared_seats[j].busy);
-        }
+            printf("[user %d] %d OCCUPATO È %d\n", getpid(), j, shared_seats[j].busy);
+        }*/
 
         msg->num = tasks[i];
         wait_semaphore(semid, shared_macros[1] + 2);
-        printf("[user %d] qui\n", getpid());
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        printf("[user %d] messaggio mandato\n", getpid());
+        
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 4, 0);
-        printf("[user %d] qua\n", getpid());
         signal_semaphore(semid, shared_macros[1] + 2);
         if(msg->num == -1){
-            printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
+            //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
             continue;
         }
         
         seat_num = msg->num;
         msg->mtype = 6 + seat_num;
         msg->num = tasks[i];
-        printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
+        //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
         
         wait_semaphore(semid, seat_num);
-        printf("[user %d] quo\n", getpid());
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
-        printf("[user %d] que\n", getpid());
-        //printf("[user] mandato num %d a sedia %d\n", msg->num, seat_num);
+        //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
         signal_semaphore(semid, seat_num);
 
         if(strcmp(msg->mtext, "end") == 0)return;
@@ -257,18 +256,20 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
 
     if(remaining_task < num_task){
         shared_daily_stats[day].user_served_daily++;
-        shared_daily_stats[day].task_done += (num_task - remaining_task);
-        shared_daily_stats[day].task_not_done += remaining_task;
 
         shared_tot_stats->num_user_served++;
-        shared_tot_stats->num_task_done += (num_task - remaining_task);
-        shared_tot_stats->num_task_not_done += remaining_task;
     }
 
+    shared_daily_stats[day].task_done += (num_task - remaining_task);
+    shared_daily_stats[day].task_not_done += remaining_task;
+
+    shared_tot_stats->num_task_done += (num_task - remaining_task);
+    shared_tot_stats->num_task_not_done += remaining_task;
+
     if(shared_daily_stats[day].user_served_daily > 0){
-        shared_daily_stats[day].avg_num_users_daily = shared_daily_stats[day].user_served_daily / shared_macros[0];
-        shared_daily_stats[day].avg_num_tasks_done_daily = shared_daily_stats[day].task_done / shared_macros[0];
-        shared_daily_stats[day].avg_num_tasks_not_done_daily = shared_daily_stats[day].task_not_done / shared_macros[0];
+        shared_daily_stats[day].avg_num_users_daily = (float)shared_daily_stats[day].user_served_daily / shared_macros[0];
+        shared_daily_stats[day].avg_num_tasks_done_daily = (float)shared_daily_stats[day].task_done / shared_macros[0];
+        shared_daily_stats[day].avg_num_tasks_not_done_daily = (float)shared_daily_stats[day].task_not_done / shared_macros[0];
     }
 
     for(int i = 0; i < num_task; i++){
@@ -285,3 +286,4 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     }
 
 }
+

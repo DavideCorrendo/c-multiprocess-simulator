@@ -11,7 +11,7 @@
 
 #define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
 
-#define N_NANO_SEC 10000000
+#define N_NANO_SEC 5000000     //<-----must be multiple of 1000
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 
@@ -75,7 +75,6 @@ typedef struct daily_stats{
 
     int num_workers_active_daily;
     float avg_num_pause_daily;
-    float num_ratio_worker_user[100];
 
 }daily_stats;
 
@@ -90,6 +89,7 @@ typedef struct tot_stats{
     float avg_time_wait;
     float avg_time_task;
 
+    int num_worker_per_task[6];
     int wait_time_per_task[6];//
     int task_time_per_task[6];//
 
@@ -101,6 +101,8 @@ typedef struct tot_stats{
 
     int num_worker_active;
     int num_pause;
+
+    float num_ratio_worker_user[100];
 }tot_stats;
 
 

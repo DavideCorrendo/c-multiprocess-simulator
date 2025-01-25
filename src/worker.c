@@ -3,8 +3,7 @@
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
 void working_time(int task, int avg_time_task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
 void update_stats(int day, int task, int task_time, bool pause, int wait_time);
-int worker_per_task(int task);
-float ratio_worker_seats(int index);
+float ratio_worker_seats(int index, int num);
 
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
@@ -55,7 +54,6 @@ int main(int argc, char *argv[]) {
 
     srand((time(NULL)) + getpid());
     int task = rand() % 6;
-
     
     key_t shm_daily_stat_key;
     key_t shm_tot_stat_key;
@@ -67,8 +65,9 @@ int main(int argc, char *argv[]) {
     initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
 
     shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
+    //printf("[worker] shmid_macros = %d\n", shmid_macros);
     if(shmid_macros == -1){
-        perror("shmget in worker");
+        perror("shmget in worker for macros");
         raise(SIGTERM);
     }
     shared_macros = shmat(shmid_macros, NULL, 0);
@@ -79,7 +78,7 @@ int main(int argc, char *argv[]) {
 
     shmid_daily_stats = shmget(shm_daily_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
     if(shmid_daily_stats == -1){
-        perror("shmget in worker");
+        perror("shmget in worker for daily stats");
         raise(SIGTERM);
     }
     shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
@@ -90,7 +89,7 @@ int main(int argc, char *argv[]) {
 
     shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
     if(shmid_tot_stats == -1){
-        perror("shmget in worker");
+        perror("shmget in worker for tot stats");
         raise(SIGTERM);
     }
     shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
@@ -101,7 +100,7 @@ int main(int argc, char *argv[]) {
 
     shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
     if(shmid_seats == -1){
-        perror("shmget in worker");
+        perror("shmget in worker for seats");
         raise(SIGTERM);
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
@@ -126,14 +125,19 @@ int main(int argc, char *argv[]) {
     int pause_counter = 0;
     memset(&msg, 0, sizeof(msg));
 
-    int day = 0;
     bool end = false;
     int seat_num = -1;
+
+    wait_semaphore(semid, shared_macros[1]);
+    shared_tot_stats->num_worker_per_task[task]++;
+    printf("[worker %d] worker con task %d = %d\n", getpid(), task, shared_tot_stats->num_worker_per_task[task]);
+    signal_semaphore(semid, shared_macros[1]);
 
     while(strcmp(msg.mtext, "end_simulation") != 0){
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
         end = false;
+        int day = shared_macros[8];
 
         while (!find_seat(task, id_worker, semid, &seat_num) && end == false) {
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
@@ -194,6 +198,7 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
         msgrcv(msgid, msg, sizeof(struct message), 2, IPC_NOWAIT);
     }
 
+    usleep(500);
     wait_semaphore(semid, shared_macros[1]);
     update_stats(day, task, time_task_count, pause, wait_time);
     signal_semaphore(semid, shared_macros[1]);
@@ -218,16 +223,14 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
 
 void update_stats(int day, int task, int task_time, bool pause, int wait_time){
 
-    int num = worker_per_task(task);
+    int num = shared_tot_stats->num_worker_per_task[task];
     
     shared_daily_stats[day].daily_waiting_time += wait_time;
     shared_daily_stats[day].time_wait_daily_per_task[task] += wait_time;
-    if(num != 0)shared_daily_stats[day].avg_time_users_wait_daily_per_task[task] = shared_daily_stats[day].time_wait_daily_per_task[task] / num;
 
     shared_tot_stats->wait_time += wait_time;
     shared_tot_stats->avg_time_wait = shared_tot_stats->wait_time / shared_macros[0];
     shared_tot_stats->wait_time_per_task[task] += wait_time;
-    if(num != 0)shared_tot_stats->avg_time_wait_per_task[task] =  shared_tot_stats->wait_time_per_task[task] / num;
 
     shared_daily_stats[day].time_task_daily += task_time;
     shared_daily_stats[day].time_task_daily_per_task[task] += task_time;
@@ -241,46 +244,42 @@ void update_stats(int day, int task, int task_time, bool pause, int wait_time){
 
     shared_daily_stats[day].avg_time_users_wait_daily = shared_daily_stats[day].daily_waiting_time / shared_macros[0];
     if(shared_daily_stats[day].task_done != 0)shared_daily_stats[day].avg_time_tasks_done_daily = shared_daily_stats[day].time_task_daily / shared_daily_stats[day].task_done;
-
-    if(num != 0){
-        shared_daily_stats[day].avg_num_users_daily_per_task[task] = shared_daily_stats[day].user_served_per_task[task] / num;
-        shared_daily_stats[day].avg_num_tasks_done_daily_per_task[task] = shared_daily_stats[day].task_done_per_task[task] / num;
-        shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[task] = shared_daily_stats[day].task_not_done_per_task[task] / num;
-    }
-
-
+    
     if(pause == true){
         shared_daily_stats[day].num_pause_daily++;
         shared_tot_stats->num_pause++;
+
+        shared_daily_stats[day].avg_time_users_wait_daily_per_task[task] = shared_daily_stats[day].time_wait_daily_per_task[task] / num;
+        shared_tot_stats->avg_time_wait_per_task[task] =  shared_tot_stats->wait_time_per_task[task] / num;
+
+    }
+
+    if(num != 0){
+        shared_daily_stats[day].avg_num_users_daily_per_task[task] = (float)shared_daily_stats[day].user_served_per_task[task] / num;
+        shared_daily_stats[day].avg_num_tasks_done_daily_per_task[task] = (float)shared_daily_stats[day].task_done_per_task[task] / num;
+        shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[task] = (float)shared_daily_stats[day].task_not_done_per_task[task] / num;
     }
 
     shared_daily_stats[day].num_workers_active_daily++;
     shared_tot_stats->num_worker_active++;
-    if(num != 0)shared_daily_stats[day].avg_num_pause_daily = shared_daily_stats[day].num_pause_daily / num;
+    if(num != 0)shared_daily_stats[day].avg_num_pause_daily = (float)shared_daily_stats[day].num_pause_daily / num;
 
     for(int i = 0; i < shared_macros[1]; i++){
-        shared_daily_stats[day].num_ratio_worker_user[i] = ratio_worker_seats(i);
+    int current_task = shared_seats[i].task;
+    int workers_for_task = shared_tot_stats->num_worker_per_task[current_task];
+    shared_tot_stats->num_ratio_worker_user[i] = ratio_worker_seats(current_task, workers_for_task);
     }
 }
 
-float ratio_worker_seats(int index){
+float ratio_worker_seats(int task, int num){
     
     int num_workerseats_per_task = 0;
     for(int i = 0; i < shared_macros[1]; i++){
-        if(shared_seats[index].task == shared_seats[i].task){
+        if(shared_seats[i].task == task){
             num_workerseats_per_task++;
         }
     }
-    return worker_per_task(shared_seats[index].task) / num_workerseats_per_task;
-}
 
-int worker_per_task(int task){
-    int cont = 0;
-    for(int i = 0; i < shared_macros[0]; i++){
-        if(shared_seats[i].task == task){
-            cont++;
-        }
-    }
-    return cont;
+    if(num_workerseats_per_task != 0)return (float)num / num_workerseats_per_task;
+    return 0;
 }
-

@@ -1,7 +1,7 @@
 CC = gcc
 SRCDIR = src
 BINDIR = bin
-CFLAGS = -Wvla -Wextra -Werror -Wall -pedantic
+CFLAGS = -g -Wvla -Wextra -Werror -Wall -pedantic
 
 # Targets
 TARGETS = $(BINDIR)/director $(BINDIR)/worker $(BINDIR)/user $(BINDIR)/ticket_erogator
