@@ -87,7 +87,7 @@ int main() {
             msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
-            msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 4);
+            msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
             
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
 

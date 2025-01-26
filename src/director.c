@@ -344,7 +344,6 @@ void simulate_day() {
 }
 
 void print_stats(int day){
-    (void) day;
 
     printf("\n\n-----------------------DAY %d-----------------------\n\n", day);
     printf("total number of user served: %d\n", shared_tot_stats->num_user_served);

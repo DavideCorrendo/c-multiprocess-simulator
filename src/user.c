@@ -147,10 +147,10 @@ int main() {
             usleep((time * N_NANO_SEC) / 1000);
             
             if(decision <= P_SERV){
-                /*printf("[user %d] num_task: %d\n", getpid(), num_task);
+                printf("[user %d] num_task: %d\n", getpid(), num_task);
                 for(int i = 0; i < num_task; i++){
                     printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
-                }*/
+                }
                 day = shared_macros[8]; 
 
                 office_time(&msg, msgid, tasks, semid, shared_macros, &remaining_task, num_task, tasks_done);
@@ -215,6 +215,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
         signal_semaphore(semid, seat_num);
 
+        printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
         if(strcmp(msg->mtext, "end") == 0)return;
         tasks_done[i] = true;
         (*remaining_task)--;
