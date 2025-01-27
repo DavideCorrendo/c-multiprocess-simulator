@@ -212,6 +212,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         
         wait_semaphore(semid, seat_num);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num + shared_macros[1], 0);
         //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
         signal_semaphore(semid, seat_num);

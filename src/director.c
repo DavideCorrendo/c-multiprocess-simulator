@@ -504,6 +504,11 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
         for(int i = 0; i < shared_macros[1]; i++){
             msg->mtype = 6 + i;
             msgsnd(msgid, msg, size, flag);
+            msgsnd(msgid, msg, size, flag);
+            msgsnd(msgid, msg, size, flag);
+            msgsnd(msgid, msg, size, flag);
+            msgsnd(msgid, msg, size, flag);
+            msgsnd(msgid, msg, size, flag);
         }
     }else{
         msg->num = 0;
@@ -511,8 +516,6 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
 
     msg->mtype = type;
     for(int i = 0; i < shared_macros[0] + shared_macros[7] + 1; i++){
-        msgsnd(msgid, msg, size, flag);
-        msgsnd(msgid, msg, size, flag);
         msgsnd(msgid, msg, size, flag);
     }
 }

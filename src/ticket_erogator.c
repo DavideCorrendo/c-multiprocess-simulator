@@ -124,7 +124,7 @@ int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int sem
     for (int i = 0; i < shared_macros[1]; i++) {
         wait_semaphore(semid, i); // Lock seat's data
         if (shared_seats[i].busy && shared_seats[i].task == task) {
-            int users_waiting = get_semaphore_value(semid, shared_seats[i].id);
+            int users_waiting = get_semaphore_value(semid, i);
             if (users_waiting < min_users) {
                 min_users = users_waiting;
                 min_index = i;
