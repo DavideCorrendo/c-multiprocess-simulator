@@ -98,7 +98,7 @@ int main() {
         wait_semaphore(semid, shared_macros[1] + 1);
         shared_macros[5]++;
         signal_semaphore(semid, shared_macros[1] + 1);
-        
+        puts("ticket finito");
         wait_semaphore(semid, shared_macros[1] + 3);
 
         msg.mtext[0] = '\0';

@@ -147,10 +147,10 @@ int main() {
             usleep((time * N_NANO_SEC) / 1000);
             
             if(decision <= P_SERV){
-                printf("[user %d] num_task: %d\n", getpid(), num_task);
+                /*printf("[user %d] num_task: %d\n", getpid(), num_task);
                 for(int i = 0; i < num_task; i++){
                     printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
-                }
+                }*/
                 day = shared_macros[8]; 
 
                 office_time(&msg, msgid, tasks, semid, shared_macros, &remaining_task, num_task, tasks_done);
@@ -164,6 +164,7 @@ int main() {
             wait_semaphore(semid, shared_macros[1] + 1);
             shared_macros[5]++;
             signal_semaphore(semid, shared_macros[1] + 1);
+            printf("[user %d] finito\n", getpid());
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
 
@@ -211,11 +212,11 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         
         wait_semaphore(semid, seat_num);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num + shared_macros[1], 0);
         //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
         signal_semaphore(semid, seat_num);
 
-        printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
+        //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
         if(strcmp(msg->mtext, "end") == 0)return;
         tasks_done[i] = true;
         (*remaining_task)--;

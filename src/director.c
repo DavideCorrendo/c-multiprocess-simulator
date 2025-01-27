@@ -10,7 +10,7 @@ void tasks_assignment(int day);
 int reset_ipc(int semid, int num_sem);
 void cleanup();
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s);
-void wait_processes(int day);
+void wait_processes();
 FILE *fp;
 
 
@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
-        wait_processes(shared_macros[8]);
+        wait_processes();
         puts("wait_process finito");
         print_stats(shared_macros[8]);
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
@@ -512,18 +512,28 @@ void send_messages(int msgid, struct message *msg, size_t size, int type, int fl
     msg->mtype = type;
     for(int i = 0; i < shared_macros[0] + shared_macros[7] + 1; i++){
         msgsnd(msgid, msg, size, flag);
+        msgsnd(msgid, msg, size, flag);
+        msgsnd(msgid, msg, size, flag);
     }
 }
 
-void wait_processes(int day){
+void wait_processes(){
 
+    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
 
-    (void)day;
+    // Get message queue statistics
+    struct msqid_ds queue_info;
+    if (msgctl(msgid, IPC_STAT, &queue_info) == -1) {
+        perror("msgctl failed");
+    } else {
+        printf("Messages in queue: %lu\n", (unsigned long)queue_info.msg_qnum);
+        printf("Max queue bytes: %lu\n", (unsigned long)queue_info.msg_qbytes);
+        printf("Current queue size: %lu bytes\n", (unsigned long)queue_info.msg_cbytes);
+    }
 
-    //printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
-
-    while(1){
-        if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1)break;
+    while(1) {
+        if(shared_macros[5] == shared_macros[0] + shared_macros[7] + 1) break;
+        printf("%d\n",shared_macros[5]);
         sleep(1);
     }
 
