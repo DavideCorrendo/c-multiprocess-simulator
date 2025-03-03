@@ -131,6 +131,8 @@ int num_user_waiting(int semid, int *shared_macros);
 void signal_handler(int sig);
 void handle_child_exit(int sig);
 void handle_termination(int sig);
+void handle_pause(int sig);
+void handle_continue(int sig);
 void cleanup(void);
 void initialize_keys_modified(key_t  *shm_macros_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);

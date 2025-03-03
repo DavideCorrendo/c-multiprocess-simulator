@@ -16,6 +16,7 @@ void task_time(struct message msg, int msgid, int semid, int *shared_macros, int
 void cleanup_resources();
 int random_weighted(int values[], int weights[], int size);
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done);
+bool exist(int i , bool tasks_done[], int tasks[]);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -197,7 +198,6 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         msg->num = tasks[i];
         wait_semaphore(semid, shared_macros[1] + 2);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 4, 0);
         signal_semaphore(semid, shared_macros[1] + 2);
         if(msg->num == -1){
@@ -207,10 +207,13 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         
         seat_num = msg->num;
         msg->mtype = 6 + seat_num;
-        msg->num = tasks[i];
+        msg->num = shared_macros[2];
+        printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
         
         wait_semaphore(semid, seat_num);
+        printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
+        msg->num = shared_macros[2] - msg->num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num + shared_macros[1], 0);
@@ -280,7 +283,7 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
             shared_daily_stats[day].user_served_per_task[tasks[i]]++;
             shared_daily_stats[day].task_done_per_task[tasks[i]]++;
 
-            shared_tot_stats->num_user_served_per_task[tasks[i]]++;
+            if(!exist(i, tasks_done, tasks))shared_tot_stats->num_user_served_per_task[tasks[i]]++;
             shared_tot_stats->num_task_done_per_task[tasks[i]]++;
         }else{
             shared_daily_stats[day].task_not_done_per_task[tasks[i]]++;
@@ -288,5 +291,15 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
         }
     }
 
+}
+
+bool exist(int i , bool tasks_done[], int tasks[]){
+    bool res = false;
+    for(int j = 0; j < i && !res; j++){
+        if(tasks[i] == tasks[j]){
+            if(tasks_done[j])res = true;   
+        }
+    }
+    return res;
 }
 
