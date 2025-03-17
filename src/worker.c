@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
             //usleep((N_NANO_SEC * 10) / 1000);
             sleep(1);
         }
-        printf("[worker %d] findseat finita end = %d\n", getpid(), end);
+        //printf("[worker %d] findseat finita end = %d\n", getpid(), end);
         if(end == false)working_time(task, time_tasks[task], seat_num, &msg, msgid, semid, pause_counter, day);
 
         if(seat_num != -1){
@@ -187,7 +187,7 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
         //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
         msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
         if(msg->num == -1)break;
-        printf("[worker %d] ricevuto messaggio %d\n", getpid(), msg->num);
+        //printf("[worker %d] ricevuto messaggio %d\n", getpid(), msg->num);
         wait_time += msg->num;
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;

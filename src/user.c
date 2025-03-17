@@ -168,9 +168,9 @@ int main() {
             printf("[user %d] finito\n", getpid());
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
-
+            printf("[%d] qui\n", getpid());
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
-
+            printf("[%d] qua %s\n", getpid(), msg.mtext);
             change_msg(&msgid);
         }
     
@@ -208,11 +208,11 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         seat_num = msg->num;
         msg->mtype = 6 + seat_num;
         msg->num = shared_macros[2];
-        printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
+        //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
         
         wait_semaphore(semid, seat_num);
-        printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
+        //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         msg->num = shared_macros[2] - msg->num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);

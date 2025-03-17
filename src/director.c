@@ -599,6 +599,7 @@ if (child_pids != NULL) {
 
 void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s){
     strcpy(msg->mtext, s);
+    printf("[direttore] messaggio: %s\n", msg->mtext);
 
     if(strcmp(s, "end") == 0){
         msg->num = -1;

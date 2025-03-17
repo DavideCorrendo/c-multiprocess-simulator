@@ -31,6 +31,14 @@ int leggi_parametro(const char *file_path, const char *parametro) {
     exit(EXIT_FAILURE);
 }
 
+int semop_retry(int semid, struct sembuf *sops, size_t nsops) {
+    int ret;
+    do {
+        ret = semop(semid, sops, nsops);
+    } while (ret == -1 && errno == EINTR);
+    return ret;
+}
+
 // Performs a semaphore operation
 int sem_operation(int semid, int sem_num, int op_value) {
     struct sembuf sem_op;
@@ -41,7 +49,7 @@ int sem_operation(int semid, int sem_num, int op_value) {
     sem_op.sem_flg = 0;        // No special flags
 
     // Perform the operation
-    if (semop(semid, &sem_op, 1) == -1) {
+    if (semop_retry(semid, &sem_op, 1) == -1) {
         perror("semop failed");
         raise(SIGTERM);
     }
