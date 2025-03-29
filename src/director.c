@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
         } 
         wait_processes();
         puts("wait_process finito");
-        print_stats(shared_macros[8]);
+        //print_stats(shared_macros[8]);
         send_messages(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0, "no_end");
         puts("messaggi mandati");
         reset_ipc(semid, shared_macros[1] + 3);   

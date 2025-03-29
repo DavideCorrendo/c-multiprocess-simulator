@@ -144,7 +144,9 @@ int main() {
                 tasks_done[i] = false;
             }
             int time = rand() % 480;
+            //printf("[user: %d] qui\n", getpid());
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+            //printf("[user: %d] qua\n", getpid());
             usleep((time * N_NANO_SEC) / 1000);
             
             if(decision <= P_SERV){
@@ -168,9 +170,9 @@ int main() {
             printf("[user %d] finito\n", getpid());
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
-            printf("[%d] qui\n", getpid());
+            //printf("[%d] qui\n", getpid());
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
-            printf("[%d] qua %s\n", getpid(), msg.mtext);
+            //printf("[%d] qua %s\n", getpid(), msg.mtext);
             change_msg(&msgid);
         }
     
