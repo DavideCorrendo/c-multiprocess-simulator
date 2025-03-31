@@ -11,7 +11,7 @@ int leggi_parametro(const char *file_path, const char *parametro) {
         exit(EXIT_FAILURE);
     }
 
-    char line[MAX_LINE_LENGTH];
+    char line[30];
     while (fgets(line, sizeof(line), file)) {
         // Remove newline character if present
         line[strcspn(line, "\n")] = 0;

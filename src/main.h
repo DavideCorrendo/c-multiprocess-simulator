@@ -3,20 +3,8 @@
 
 #define _GNU_SOURCE
 
-#define MAX_LINE_LENGTH 100
-
-#define MAX_MSG_SIZE    20
-
-#define NUM_MACROS      100
-
-#define NANOSECONDS_PER_MINUTE 60000000000ULL // 1 minute = 60 seconds = 60 billion nanoseconds
-
-#define N_NANO_SEC 5000000     //<-----must be multiple of 1000
-
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
-
-#define P_SERV_MIN 80 
-#define P_SERV_MAX 50
+#define N_NANO_SECS 10000000
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,13 +90,23 @@ typedef struct tot_stats{
     int num_worker_active;
     int num_pause;
 
-    float num_ratio_worker_user[100];
+    float num_ratio_worker_user[100];//VA MESSO IN DAILY---------------------------------------
 }tot_stats;
 
+typedef struct shared_data{
+    int NOF_WORKERS;
+    int NOF_WORKERSEATS;
+    int timer;
+    int NOF_PAUSE;
+    int N_REQUESTS;
+    int NOF_USERS;
+    int current_day;
+    int processes_finished;
+}shared_data;
 
 struct message {
     long mtype;
-    char mtext[MAX_MSG_SIZE];
+    char mtext[10];
     int num;
 };
 

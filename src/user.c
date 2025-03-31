@@ -170,9 +170,9 @@ int main() {
             printf("[user %d] finito\n", getpid());
             wait_semaphore(semid, shared_macros[1] + 3);
             msg.mtext[0] = '\0';
-            //printf("[%d] qui\n", getpid());
+            printf("[%d] qui\n", getpid());
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
-            //printf("[%d] qua %s\n", getpid(), msg.mtext);
+            printf("[%d] qua %s\n", getpid(), msg.mtext);
             change_msg(&msgid);
         }
     
