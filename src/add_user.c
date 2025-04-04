@@ -17,13 +17,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Ottieni le chiavi IPC esistenti
-    key_t shm_macros_key = ftok("/tmp", 'D');
+    key_t shm_data_key = ftok("/tmp", 'D'); //<----------------------da sistemare-------------------->
     
     // Attacca alla memoria condivisa
-    int shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0666);
-    int *shared_macros = (int*)shmat(shmid_macros, NULL, 0);
+    int shmid_data = shmget(shm_data_key, sizeof(struct shared_data), 0666);//<------------da controllare perchè sostituito a NUM_MACROS------>
+    shared_data *shared_data = shmat(shmid_data, NULL, 0);
     
-    shared_macros[7] += new_users; 
+    shared_data->NOF_USERS += new_users; 
     
     
     // Crea nuovi processi utente
@@ -37,11 +37,11 @@ int main(int argc, char *argv[]) {
         else if (pid > 0) {
             // Aggiorna contatore processi in modo sicuro
 
-            shared_macros[5]++; // Processi attesi
+            shared_data->processes_finished++; // Processi attesi
 
         }
     }
     
-    shmdt(shared_macros);
+    shmdt(shared_data);
     return 0;
 }

@@ -97,25 +97,25 @@ int initSem(int semid, int num_sems) {
 }
 
 // Initializes shared memory keys
-void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_macros_key, key_t *sem_key, key_t *msg_key) {
+void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_data_key, key_t *sem_key, key_t *msg_key) {   //<------------da controllare------------------>
     *shm_daily_stat_key = ftok("/tmp", 'A');
     *shm_tot_stat_key = ftok("/tmp", 'B');
     *shm_seats_key = ftok("/tmp", 'C');
-    *shm_macros_key = ftok("/tmp", 'D');
+    *shm_data_key = ftok("/tmp", 'D');
     *sem_key = ftok("/tmp", 'E');
     *msg_key = ftok("/tmp", 'F');
 
     if (*shm_daily_stat_key == -1 || *shm_tot_stat_key == -1 || *shm_seats_key == -1 ||
-        *shm_macros_key == -1 || *sem_key == -1 || *msg_key == -1) {
+        *shm_data_key == -1 || *sem_key == -1 || *msg_key == -1) {
         perror("ftok failed");
         exit(EXIT_FAILURE);
     }
 }
 
 // Counts waiting users in the simulation
-int num_user_waiting(int semid, int *shared_macros) {
+int num_user_waiting(int semid, shared_data *shared_data) {
     int count = 0;
-    for (int i = 0; i < shared_macros[1]; i++) {
+    for (int i = 0; i < shared_data->NOF_WORKERSEATS; i++) {
         int val = get_semaphore_value(semid, i);
         if (val > 0) {
             count += val;
@@ -125,13 +125,13 @@ int num_user_waiting(int semid, int *shared_macros) {
 }
 
 // Initializes a modified set of keys (example placeholder)
-void initialize_keys_modified(key_t *shm_macros_key, key_t *sem_key, key_t *msg_key, key_t *shm_seats_key) {
-    *shm_macros_key = ftok("/tmp", 'D');
+void initialize_keys_modified(key_t *shm_data_key, key_t *sem_key, key_t *msg_key, key_t *shm_seats_key) {
+    *shm_data_key = ftok("/tmp", 'D');
     *sem_key = ftok("/tmp", 'E');
     *msg_key = ftok("/tmp", 'F');
     *shm_seats_key = ftok("/tmp", 'C');
 
-    if (*shm_macros_key == -1 || *sem_key == -1 || *msg_key == -1 || *shm_seats_key == -1) {
+    if (*shm_data_key == -1 || *sem_key == -1 || *msg_key == -1 || *shm_seats_key == -1) {
         perror("ftok failed");
         exit(EXIT_FAILURE);
     }

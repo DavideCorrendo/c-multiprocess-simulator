@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
 
     initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
 
-    shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
+    shmid_macros = shmget(shm_macros_key, sizeof(int) * 9, 0);    //<-----------------da controllare sostituito con NUM_MACROS-------------------->
     //printf("[worker] shmid_macros = %d\n", shmid_macros);
     if(shmid_macros == -1){
         perror("shmget in worker for macros");

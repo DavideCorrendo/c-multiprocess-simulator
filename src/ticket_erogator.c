@@ -1,10 +1,10 @@
 #include "main.h"
 
-static int *shared_macros = NULL;
+static shared_data *shared_data = NULL;
 static worker_seat *shared_seats = NULL;
 
 void cleanup_resources();
-int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid);
+int search_seat(int task, worker_seat *shared_seats, shared_data *shared_data, int semid);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -21,7 +21,7 @@ void signal_handler(int sig) {
 }
 
 int main() {
-    struct sigaction sa;
+    struct sigaction sa; 
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
     
@@ -40,32 +40,32 @@ int main() {
 
     struct message msg;
 
-    key_t shm_macros_key;
+    key_t shm_data_key;
     key_t shm_seats_key;
     key_t sem_key;
     key_t msg_key;
 
-    initialize_keys_modified(&shm_macros_key, &sem_key, &msg_key, &shm_seats_key);
+    initialize_keys_modified(&shm_data_key, &sem_key, &msg_key, &shm_seats_key);
     int msgid = msgget(msg_key, 0);
     if(msgid == -1) {
         perror("msgget in ticket");
         raise(SIGTERM);
     }
 
-    int shmid_macros = shmget(shm_macros_key, sizeof(int) * NUM_MACROS, 0);
-    if(shmid_macros == -1) {
+    int shmid_data = shmget(shm_data_key, sizeof(struct shared_data), 0);    //<-----------------da guardare sostituito con NUM_MACROS-------------->
+    if(shmid_data == -1) {
         perror("shmget in ticket erogator");
         raise(SIGTERM);
     }
-    shared_macros = shmat(shmid_macros, NULL, 0);
+    shared_data = shmat(shmid_data, NULL, 0);
 
-    int semid = semget(sem_key, shared_macros[1] + 3, 0);
+    int semid = semget(sem_key, shared_data->NOF_WORKERSEATS += 3, 0);
     if(semid == -1) {
         perror("semget");
         raise(SIGTERM);
     }
 
-    int shmid_seats = shmget(shm_seats_key, shared_macros[1] * sizeof(worker_seat), 0);
+    int shmid_seats = shmget(shm_seats_key, shared_data->NOF_WORKERSEATS * sizeof(worker_seat), 0);
     if(shmid_seats == -1){
         perror("semget");
         raise(SIGTERM);
