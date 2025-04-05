@@ -67,8 +67,8 @@ int signal_semaphore(int semid, int sem_num) {
     return sem_operation(semid, sem_num, 1);
 }
 
-void wait(int semid, int sem_num){
-    while(get_semaphore_value(semid,sem_num) == 0 && get_semaphore_value(semid,1) == 0){
+void wait_signal(int semid, int sem_num){
+    while(get_semaphore_value(semid,sem_num) == 0 ){
         usleep(750);
     }
 }
@@ -129,3 +129,10 @@ void reset_signals_to_default() {
     signal(SIGHUP, SIG_DFL);
 }
 
+void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int semid){
+    msg->num = -1;
+    while(get_semaphore_value(semid,1) == 0 && msg->num == -1){
+        msgrcv(msgid, msg, size, type, IPC_NOWAIT);
+        usleep(500);
+    }
+}

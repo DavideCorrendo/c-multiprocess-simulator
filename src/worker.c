@@ -42,6 +42,8 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
+    printf("[%d] worker iniziato \n", getpid());
+
     struct message msg;
 
     int id_worker = atoi(argv[1]);
@@ -137,9 +139,9 @@ int main(int argc, char *argv[]) {
     shared_tot_stats->num_worker_per_task[task]++;
     signal_semaphore(semid, 4);
 
-    while(get_semaphore_value(semid, 3) == 1){
+    while(get_semaphore_value(semid, 3) == 0){
 
-        wait_semaphore(semid, 0); 
+        wait_signal(semid, 0); 
         end = false;
         int day = shared_macros->current_day;
         seat_num = -1;
@@ -162,11 +164,13 @@ int main(int argc, char *argv[]) {
             signal_semaphore(semid, seat_num + num_sem);
         }
 
+        wait_signal(semid, 1);
+
         wait_semaphore(semid, 5);
         shared_macros->processes_finished++;
         signal_semaphore(semid, 5);
         printf("[worker %d] worker finito\n", getpid());
-        wait_semaphore(semid, 1);
+        
         
         msg.num = -1;
 
@@ -187,7 +191,7 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
 
     while (get_semaphore_value(semid, 1) == 0 && !pause) {
         //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), seat_num, 0);
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num, semid);
         if(msg->num == -1)break;
         //printf("[worker %d] ricevuto messaggio %d\n", getpid(), msg->num);
         wait_time += msg->num;
@@ -213,7 +217,7 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
 
     }
 
-    usleep(500);
+    //usleep(500);
     wait_semaphore(semid, 4);
     update_stats(day, task, time_task_count, pause, wait_time);
     signal_semaphore(semid, 4);

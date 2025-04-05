@@ -91,7 +91,7 @@ typedef struct tot_stats{
     int num_worker_active;
     int num_pause;
 
-    float num_ratio_worker_user[100];//VA MESSO IN DAILY---------------------------------------
+    double num_ratio_worker_user[100];//VA MESSO IN DAILY---------------------------------------
 }tot_stats;
 
 typedef struct shared_data{
@@ -129,6 +129,7 @@ void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *
 void initialize_keys_modified(key_t  *shm_data_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);
 void reset_signals_to_default();
-void wait(int semid, int sem_num);
+void wait_signal(int semid, int sem_num);
+void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int semid);
 
 #endif
