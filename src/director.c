@@ -1,15 +1,17 @@
 #include "main.h"
 
 void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS);
-
+void handle_child_exit(int sig);
+void handle_termination(int sig);
 void simulate_day();
 void print_stats(int day);
 void tasks_assignment();
 int reset_ipc();
 void cleanup();
-void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s);
 void wait_processes();
 void print_file_stats();
+void load_config(const char *filename, int NOF_WORKERS, int NOF_WORKERSEATS, int NOF_USERS, int NOF_PAUSE,
+int N_REQUEST, int P_SERVE_MIN, int P_SERVE_MAX);
 FILE *fp;
 
 
@@ -27,6 +29,7 @@ static shared_data *shared_macros = NULL;
 static pid_t *child_pids;
 static int num_children = 0;
 static int SIM_DURATION;
+static int EXPLODE_THRESHOLD;
 FILE *fp;
 
 void add_child_pid(pid_t pid) {
@@ -112,34 +115,24 @@ void handle_termination(int sig) {
     exit(EXIT_FAILURE);
 }
 
-void validate_inputs(int argc, char **argv) {
-    if (argc != 6) {
-        fprintf(stderr, "Usage: %s <NOF_WORKERS> <NOF_WORKERSEAT> <NOF_USERS> <N_OF_PAUSE> <N_REQUEST>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    for (int i = 1; i < argc; i++) {
-        if (atoi(argv[i]) <= 0) {
-            fprintf(stderr, "Error: All arguments must be positive integers.\n");
-            exit(EXIT_FAILURE);
-        }
-    }
-}
 
 int main(int argc, char **argv) {
-    validate_inputs(argc, argv);
     setup_signal_handlers();     
 
-    const char *file_timeout = "config_timeout.conf";
     const char *file_explode = "config_explode.conf";
 
-    SIM_DURATION = leggi_parametro(file_timeout, "SIM_DURATION");
-    int explode_threshold = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
+    EXPLODE_THRESHOLD = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
 
-    int NOF_WORKERS = atoi(argv[1]);
-    int NOF_WORKERSEATS = atoi(argv[2]);
-    int NOF_USERS = atoi(argv[3]);
-    int N_OF_PAUSE = atoi(argv[4]);
-    int N_REQUEST = atoi(argv[5]);
+    int NOF_WORKERS;
+    int NOF_WORKERSEATS;
+    int NOF_USERS;
+    int NOF_PAUSE;
+    int N_REQUEST;
+    int P_SERVE_MIN;
+    int P_SERVE_MAX;
+
+    load_config("config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST,
+        &P_SERVE_MIN, &P_SERVE_MAX);
 
     puts("program started");
 
@@ -148,10 +141,13 @@ int main(int argc, char **argv) {
     shared_macros->NOF_WORKERS = NOF_WORKERS;
     shared_macros->NOF_WORKERSEATS = NOF_WORKERSEATS;
     shared_macros->current_day = 0;
-    shared_macros->NOF_PAUSE = N_OF_PAUSE; 
+    shared_macros->NOF_PAUSE = NOF_PAUSE; 
     shared_macros->timer = 0;
     shared_macros->N_REQUESTS = N_REQUEST;
     shared_macros->NOF_USERS = NOF_USERS;
+    shared_macros->P_SERVE_MIN = P_SERVE_MIN;
+    shared_macros->P_SERVE_MAX = P_SERVE_MAX;
+
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
         shared_seats[i].id = i;
@@ -220,7 +216,7 @@ int main(int argc, char **argv) {
         msg.mtype = 1;
         signal_semaphore(semid, 0);
         simulate_day();
-        if(((shared_macros->NOF_WORKERS+shared_macros->NOF_USERS) - shared_macros->processes_finished) >= explode_threshold){
+        if(((shared_macros->NOF_WORKERS+shared_macros->NOF_USERS) - shared_macros->processes_finished) >= EXPLODE_THRESHOLD){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
@@ -289,7 +285,7 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
     }
 
     // Attach shared memory
-    shared_daily_stats = (daily_stats *)shmat(shmid_daily_stats, NULL, 0);
+    shared_daily_stats = (daily_stats **)shmat(shmid_daily_stats, NULL, 0);
     if (shared_daily_stats == (void *)-1) {
         perror("shmat stats failed");
         raise(SIGTERM);
@@ -307,7 +303,7 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
         raise(SIGTERM);
     }
 
-    shared_macros = (int*) shmat(shmid_macros, NULL, 0);
+    shared_macros = (shared_data *) shmat(shmid_macros, NULL, 0);
     if (shared_macros == (void *)-1) {
         perror("shmat macros failed");
         raise(SIGTERM);
@@ -491,11 +487,11 @@ int reset_ipc() {
 
     shared_macros->processes_finished = 0;
 
-    union semun {
+    /*union semun {
         int val;
         struct semid_ds *buf;
         unsigned short *array;
-    } sem_union;
+    } sem_union;*/
     
     shared_macros->timer = 0;
 
@@ -503,7 +499,6 @@ int reset_ipc() {
 }
 
 void cleanup(){
-
 
 if (child_pids != NULL) {
         for (int i = 0; i < num_children; i++) {
@@ -551,34 +546,9 @@ if (child_pids != NULL) {
     }
 }
 
-void send_messages(int msgid, struct message *msg, size_t size, int type, int flag, char *s){
-    strcpy(msg->mtext, s);
-    printf("[direttore] messaggio: %s\n", msg->mtext);
-
-    if(strcmp(s, "end") == 0){
-        msg->num = -1;
-        msg->mtype = 4;
-        for(int i = 0; i <= shared_macros->NOF_USERS; i++){
-            msgsnd(msgid, msg, size, flag);
-        }
-
-        for(int i = 0; i < 3 * shared_macros->NOF_WORKERSEATS; i++){
-            msg->mtype = 6 + i;
-            msgsnd(msgid, msg, size, flag);
-        }
-    }else{
-        msg->num = 0;
-    }
-
-    msg->mtype = type;
-    for(int i = 0; i < shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1; i++){
-        msgsnd(msgid, msg, size, flag);
-    }
-}
-
 void wait_processes(){
 
-    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros[0], shared_macros[7]);
+    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros->NOF_WORKERS, shared_macros->NOF_USERS);
 
     // Get message queue statistics
     /*struct msqid_ds queue_info;
@@ -596,4 +566,63 @@ void wait_processes(){
         sleep(1);
     }
 
+}
+
+void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE,
+    int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX) {
+
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Errore apertura file di configurazione");
+        exit(EXIT_FAILURE);
+    }
+
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        // Ignora righe vuote e commenti
+        if (line[0] == '#' || line[0] == '\n') continue;
+        
+        // Rimuovi spazi e newline
+        line[strcspn(line, "\n")] = 0;
+        
+        // Dividi chiave e valore
+        char *key = strtok(line, " =");
+        char *value = strtok(NULL, " =");
+        
+        if (!key || !value) continue;  // Formato non valido
+
+        // Assegnazione valori
+        if (strcmp(key, "SIM_DURATION") == 0) {
+            SIM_DURATION = atoi(value);
+        } 
+        else if (strcmp(key, "NOF_WORKERS") == 0) {
+            *NOF_WORKERS = atoi(value);
+        }
+        else if (strcmp(key, "NOF_WORKERSEATS") == 0) {
+            *NOF_WORKERSEATS = atoi(value);
+        }
+        else if (strcmp(key, "P_SERV_MIN") == 0) {
+            *P_SERVE_MIN = atof(value);  // float per probabilità
+        }
+        else if (strcmp(key, "P_SERV_MAX") == 0) {
+            *P_SERVE_MAX = atof(value);
+        }
+        else if (strcmp(key, "NOF_PAUSE") == 0) {
+            *NOF_PAUSE = atoi(value);
+        }
+        else if (strcmp(key, "NOF_REQUESTS") == 0) {
+            *N_REQUEST = atoi(value);
+        }
+        else {
+            fprintf(stderr, "Parametro sconosciuto: %s\n", key);
+        }
+    }
+    
+    fclose(file);
+    
+    // Verifica valori minimi (esempio)
+    if (SIM_DURATION <= 0) {
+        fprintf(stderr, "SIM_DURATION deve essere > 0\n");
+        exit(EXIT_FAILURE);
+    }
 }

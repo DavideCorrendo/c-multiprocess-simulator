@@ -9,10 +9,11 @@ static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
-static int *shared_macros = NULL;
+static shared_data *shared_macros = NULL;
+int SIM_DURATION;
 
-void office_time(struct message *msg, int msgid, int tasks[], int semid, int shared_macros[], int *remaining_task, int num_task, bool tasks_done[]);
-void task_time(struct message msg, int msgid, int semid, int *shared_macros, int worker_id, int seat_num, bool *end_day);
+void office_time(struct message *msg, int msgid, int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]);
+void task_time(struct message msg, int msgid, int semid, int worker_id, int seat_num, bool *end_day);
 void cleanup_resources();
 int random_weighted(int values[], int weights[], int size);
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done);
@@ -50,6 +51,10 @@ int main() {
         raise(SIGTERM);
     }
 
+    FILE *file = fopen("config_timeout.conf", "r");
+    fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
+    fclose(file);
+
     struct message msg;
 
     key_t shm_daily_stat_key;
@@ -72,7 +77,7 @@ int main() {
         raise(SIGTERM);
     }
 
-    shmid_daily_stats = shmget(shm_daily_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
+    shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), 0);
     if(shmid_daily_stats == -1){
         perror("shmget in worker");
         raise(SIGTERM);
@@ -94,7 +99,7 @@ int main() {
         raise(SIGTERM);
     }
 
-    shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
+    shmid_seats = shmget(shm_seats_key, shared_macros->NOF_WORKERSEATS, 0);
     if(shmid_seats == -1){
         perror("shmget in worker");
         raise(SIGTERM);
@@ -105,7 +110,7 @@ int main() {
         raise(SIGTERM);
     }
 
-    semid = semget(sem_key, shared_macros[1] + 3, 0);
+    semid = semget(sem_key, shared_macros->NOF_WORKERSEATS + num_sem, 0);
     if(semid == -1){
         perror("semid");
         raise(SIGTERM);
@@ -127,15 +132,16 @@ int main() {
 
     //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
 
+    
 
-        while(strcmp(msg.mtext, "end_simulation") != 0) {
+        while(get_semaphore_value(semid, 3) == 0) {
 
             //printf("%d iniziato \n", getpid());
 
-            int P_SERV = rand() % (P_SERV_MAX - P_SERV_MIN + 1) + P_SERV_MIN;//probabilty to go to the office
+            int P_SERV = rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1) + shared_macros->P_SERVE_MIN;//probabilty to go to the office
             
             int decision = rand() % 101;
-            int num_task = (rand() % shared_macros[6]) + 1;
+            int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
             int remaining_task = num_task;
             int *tasks = malloc(num_task * sizeof(int));
             bool *tasks_done = malloc(num_task * sizeof(bool));
@@ -145,35 +151,32 @@ int main() {
             }
             int time = rand() % 480;
             //printf("[user: %d] qui\n", getpid());
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+            wait_semaphore(semid, 0); 
             //printf("[user: %d] qua\n", getpid());
-            usleep((time * N_NANO_SEC) / 1000);
+            usleep((time * N_NANO_SECS) / 1000);
             
             if(decision <= P_SERV){
                 /*printf("[user %d] num_task: %d\n", getpid(), num_task);
                 for(int i = 0; i < num_task; i++){
                     printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
                 }*/
-                day = shared_macros[8]; 
+                day = shared_macros->current_day; 
 
-                office_time(&msg, msgid, tasks, semid, shared_macros, &remaining_task, num_task, tasks_done);
-                wait_semaphore(semid, shared_macros[1]);
+                office_time(&msg, msgid, tasks, semid, &remaining_task, num_task, tasks_done);
+                wait_semaphore(semid, 4);
                 update_stats(num_task, remaining_task, day, tasks, tasks_done);
-                signal_semaphore(semid, shared_macros[1]);
+                signal_semaphore(semid, 4);
             }
 
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
-
-            wait_semaphore(semid, shared_macros[1] + 1);
-            shared_macros[5]++;
-            signal_semaphore(semid, shared_macros[1] + 1);
+            wait_semaphore(semid, 4);
+            shared_macros->processes_finished++;
+            signal_semaphore(semid, 4);
             printf("[user %d] finito\n", getpid());
-            wait_semaphore(semid, shared_macros[1] + 3);
-            msg.mtext[0] = '\0';
+            
             printf("[%d] qui\n", getpid());
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
-            printf("[%d] qua %s\n", getpid(), msg.mtext);
-            change_msg(&msgid);
+            wait_semaphore(semid, 1);
+            
+            //change_msg(&msgid);
         }
     
     reset_signals_to_default();
@@ -182,15 +185,13 @@ int main() {
     return 1;
 }
 
-void office_time(struct message *msg, int msgid, int tasks[], int semid, int shared_macros[], int *remaining_task, int num_task, bool tasks_done[]) {
+void office_time(struct message *msg, int msgid, int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]) {
     
-    msg->mtype = 4; 
     int seat_num;
 
-    for(int i = 0; i < num_task; i++){
+    for(int i = 0; i < num_task || get_semaphore_value(semid, 1) == 1; i++){
 
-        msg->mtype = 4;
-
+        msg->mtype = 0; 
         /*printf("[user %d] taks[%d] = %d\n", getpid(), i, tasks[i]);
 
         for(int j = 0; j < shared_macros[1]; j++){
@@ -198,32 +199,31 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int sha
         }*/
 
         msg->num = tasks[i];
-        wait_semaphore(semid, shared_macros[1] + 2);
+        wait_semaphore(semid, 2);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 4, 0);
-        signal_semaphore(semid, shared_macros[1] + 2);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 0, 0);
+        signal_semaphore(semid, 2);
         if(msg->num == -1){
             //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
             continue;
         }
         
         seat_num = msg->num;
-        msg->mtype = 6 + seat_num;
-        msg->num = shared_macros[2];
+        msg->mtype = seat_num;
+        msg->num = shared_macros->timer;
         //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
         
-        wait_semaphore(semid, seat_num);
+        wait_semaphore(semid, num_sem + seat_num);
         //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
-        msg->num = shared_macros[2] - msg->num;
+        msg->num = shared_macros->timer - msg->num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num + shared_macros[1], 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), seat_num, 0);
         //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
-        signal_semaphore(semid, seat_num);
+        signal_semaphore(semid, num_sem + seat_num);
 
         //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
-        if(strcmp(msg->mtext, "end") == 0)return;
         tasks_done[i] = true;
         (*remaining_task)--;
     }
@@ -275,9 +275,9 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     shared_tot_stats->num_task_not_done += remaining_task;
 
     if(shared_daily_stats[day].user_served_daily > 0){
-        shared_daily_stats[day].avg_num_users_daily = (float)shared_daily_stats[day].user_served_daily / shared_macros[0];
-        shared_daily_stats[day].avg_num_tasks_done_daily = (float)shared_daily_stats[day].task_done / shared_macros[0];
-        shared_daily_stats[day].avg_num_tasks_not_done_daily = (float)shared_daily_stats[day].task_not_done / shared_macros[0];
+        shared_daily_stats[day].avg_num_users_daily = (float)shared_daily_stats[day].user_served_daily / shared_macros->NOF_WORKERS;
+        shared_daily_stats[day].avg_num_tasks_done_daily = (float)shared_daily_stats[day].task_done / shared_macros->NOF_WORKERS;
+        shared_daily_stats[day].avg_num_tasks_not_done_daily = (float)shared_daily_stats[day].task_not_done / shared_macros->NOF_WORKERS;
     }
 
     for(int i = 0; i < num_task; i++){

@@ -1,10 +1,10 @@
 #include "main.h"
 
-static shared_data *shared_data = NULL;
+static shared_data *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
 void cleanup_resources();
-int search_seat(int task, worker_seat *shared_seats, shared_data *shared_data, int semid);
+int search_seat(int task, worker_seat *shared_seats, int semid);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -57,51 +57,49 @@ int main() {
         perror("shmget in ticket erogator");
         raise(SIGTERM);
     }
-    shared_data = shmat(shmid_data, NULL, 0);
+    shared_macros = shmat(shmid_data, NULL, 0);
 
-    int semid = semget(sem_key, shared_data->NOF_WORKERSEATS += 3, 0);
+    int semid = semget(sem_key, shared_macros->NOF_WORKERSEATS += 3, 0);
     if(semid == -1) {
         perror("semget");
         raise(SIGTERM);
     }
 
-    int shmid_seats = shmget(shm_seats_key, shared_data->NOF_WORKERSEATS * sizeof(worker_seat), 0);
+    int shmid_seats = shmget(shm_seats_key, shared_macros->NOF_WORKERSEATS * sizeof(worker_seat), 0);
     if(shmid_seats == -1){
         perror("semget");
         raise(SIGTERM);
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
-    while(strcmp(msg.mtext, "end_simulation") != 0){
+    while(get_semaphore_value(semid, 3) == 0){
 
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
 
-        while(strcmp(msg.mtext, "end") != 0 && msg.num != -1){
+        while(get_semaphore_value(semid, 1) == 0 && msg.num != -1){
             //puts("ASPETTO");
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 4, 0);
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 0, 0);
             //printf("[ticket er.] preso task %d\n", msg.num);
 
             if(msg.num == -1)break;
-            msg.mtype = 4;
-            msg.num = search_seat(msg.num, shared_seats, shared_macros, semid);
+            msg.mtype = 0;
+            msg.num = search_seat(msg.num, shared_seats, semid);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
-            
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
 
-            msg.num = 0;
+            //msg.num = 0;
 
         }
 
-        wait_semaphore(semid, shared_macros[1] + 1);
-        shared_macros[5]++;
-        signal_semaphore(semid, shared_macros[1] + 1);
+        wait_semaphore(semid, 5);
+        shared_macros->processes_finished++;
+        signal_semaphore(semid, 5);
         puts("ticket finito");
-        wait_semaphore(semid, shared_macros[1] + 3);
+        wait_semaphore(semid, 0);
 
-        msg.mtext[0] = '\0';
+        
         msg.num = 0;
 
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
@@ -117,11 +115,11 @@ int main() {
 
 }
 
-int search_seat(int task, worker_seat *shared_seats, int *shared_macros, int semid){
+int search_seat(int task, worker_seat *shared_seats, int semid){
     int min_users = INT_MAX;
     int min_index = -1;
 
-    for (int i = 0; i < shared_macros[1]; i++) {
+    for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
         wait_semaphore(semid, i); // Lock seat's data
         if (shared_seats[i].busy && shared_seats[i].task == task) {
             int users_waiting = get_semaphore_value(semid, i);

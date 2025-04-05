@@ -67,6 +67,12 @@ int signal_semaphore(int semid, int sem_num) {
     return sem_operation(semid, sem_num, 1);
 }
 
+void wait(int semid, int sem_num){
+    while(get_semaphore_value(semid,sem_num) == 0 && get_semaphore_value(semid,1) == 0){
+        usleep(750);
+    }
+}
+
 // Initializes a specific semaphore in the set
 int init_semaphore(int semid, int sem_num, int value) {
     arg.val = value;
@@ -86,16 +92,6 @@ int get_semaphore_value(int semid, int sem_num) {
     return val;
 }
 
-// Initializes all semaphores in a set
-int initSem(int semid, int num_sems) {
-    for (int i = 0; i < num_sems; i++) {
-        if (init_semaphore(semid, i, 1) == -1) {
-            return -1;
-        }
-    }
-    return 0;
-}
-
 // Initializes shared memory keys
 void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_data_key, key_t *sem_key, key_t *msg_key) {   //<------------da controllare------------------>
     *shm_daily_stat_key = ftok("/tmp", 'A');
@@ -112,18 +108,6 @@ void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *
     }
 }
 
-// Counts waiting users in the simulation
-int num_user_waiting(int semid, shared_data *shared_data) {
-    int count = 0;
-    for (int i = 0; i < shared_data->NOF_WORKERSEATS; i++) {
-        int val = get_semaphore_value(semid, i);
-        if (val > 0) {
-            count += val;
-        }
-    }
-    return count;
-}
-
 // Initializes a modified set of keys (example placeholder)
 void initialize_keys_modified(key_t *shm_data_key, key_t *sem_key, key_t *msg_key, key_t *shm_seats_key) {
     *shm_data_key = ftok("/tmp", 'D');
@@ -134,15 +118,6 @@ void initialize_keys_modified(key_t *shm_data_key, key_t *sem_key, key_t *msg_ke
     if (*shm_data_key == -1 || *sem_key == -1 || *msg_key == -1 || *shm_seats_key == -1) {
         perror("ftok failed");
         exit(EXIT_FAILURE);
-    }
-}
-
-void change_msg(int *msgid){
-    key_t msg_key = ftok("/tmp", 'F');
-
-    if((*msgid = msgget(msg_key, 0)) == -1){
-        perror("Failed to remake msg");
-        raise(SIGTERM);
     }
 }
 

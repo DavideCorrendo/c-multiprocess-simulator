@@ -14,7 +14,8 @@ static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
-static int *shared_macros = NULL;
+static shared_data *shared_macros = NULL;
+int SIM_DURATION;
 
 // Cleanup function
 void cleanup_resources() {
@@ -62,6 +63,10 @@ int main(int argc, char *argv[]) {
     key_t sem_key;
     key_t msg_key;
 
+    FILE *file = fopen("config_timeout.conf", "r");
+    fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
+    fclose(file);
+
     initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
 
     shmid_macros = shmget(shm_macros_key, sizeof(int) * 9, 0);    //<-----------------da controllare sostituito con NUM_MACROS-------------------->
@@ -76,7 +81,7 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    shmid_daily_stats = shmget(shm_daily_stat_key, shared_macros[3] * sizeof(daily_stats), 0);
+    shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), 0);
     if(shmid_daily_stats == -1){
         perror("shmget in worker for daily stats");
         raise(SIGTERM);
@@ -98,7 +103,7 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    shmid_seats = shmget(shm_seats_key, shared_macros[1], 0);
+    shmid_seats = shmget(shm_seats_key, shared_macros->NOF_WORKERSEATS, 0);
     if(shmid_seats == -1){
         perror("shmget in worker for seats");
         raise(SIGTERM);
@@ -109,7 +114,7 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    semid = semget(sem_key, shared_macros[1] + 3, 0);
+    semid = semget(sem_key, 100, 0);
     if(semid == -1){
         perror("semid");
         raise(SIGTERM);
@@ -126,23 +131,24 @@ int main(int argc, char *argv[]) {
     memset(&msg, 0, sizeof(msg));
 
     bool end = false;
-    int seat_num = -1;
+    int seat_num;
 
-    wait_semaphore(semid, shared_macros[1]);
+    wait_semaphore(semid, 4);
     shared_tot_stats->num_worker_per_task[task]++;
-    signal_semaphore(semid, shared_macros[1]);
+    signal_semaphore(semid, 4);
 
-    while(strcmp(msg.mtext, "end_simulation") != 0){
+    while(get_semaphore_value(semid, 3) == 1){
 
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+        wait_semaphore(semid, 0); 
         end = false;
-        int day = shared_macros[8];
+        int day = shared_macros->current_day;
+        seat_num = -1;
 
         while (!find_seat(task, id_worker, semid, &seat_num) && end == false) {
             //printf("[worker %d] qui\n", getpid());
-            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, IPC_NOWAIT);
+            end = get_semaphore_value(semid, 1);
             //printf("[worker %d] qua\n", getpid());
-            if(strcmp(msg.mtext, "end") == 0){end = true; break;}
+            if(end){break;}
             //usleep((N_NANO_SEC * 10) / 1000);
             sleep(1);
         }
@@ -150,25 +156,21 @@ int main(int argc, char *argv[]) {
         if(end == false)working_time(task, time_tasks[task], seat_num, &msg, msgid, semid, pause_counter, day);
 
         if(seat_num != -1){
-            wait_semaphore(semid, seat_num);
+            wait_semaphore(semid, seat_num + num_sem);
             shared_seats[seat_num].busy = false;
             shared_seats[seat_num].worker_id = -1;
-            signal_semaphore(semid, seat_num);
+            signal_semaphore(semid, seat_num + num_sem);
         }
 
-        wait_semaphore(semid, shared_macros[1] + 1);
-        shared_macros[5]++;
-        signal_semaphore(semid, shared_macros[1] + 1);
+        wait_semaphore(semid, 5);
+        shared_macros->processes_finished++;
+        signal_semaphore(semid, 5);
         printf("[worker %d] worker finito\n", getpid());
-        wait_semaphore(semid, shared_macros[1] + 3);
-        msg.mtext[0] = '\0';
-        msg.num = 0;
+        wait_semaphore(semid, 1);
+        
+        msg.num = -1;
 
         seat_num = -1;
-
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 5, 0);
-
-        change_msg(&msgid);
 
     }
 
@@ -183,47 +185,45 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
     bool pause = false;
     int user_served = 0, time_task_count = 0, wait_time = 0;
 
-    while (strcmp(msg->mtext, "end") != 0 && !pause) {
+    while (get_semaphore_value(semid, 1) == 0 && !pause) {
         //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
-        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), 6 + seat_num, 0);
+        msgrcv(msgid, msg, sizeof(struct message) - sizeof(long), seat_num, 0);
         if(msg->num == -1)break;
         //printf("[worker %d] ricevuto messaggio %d\n", getpid(), msg->num);
         wait_time += msg->num;
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;
         time_task *= (float)avg_time_task;
-        usleep((time_task * N_NANO_SEC) / 1000);
+        usleep((time_task * N_NANO_SECS) / 1000);
 
-        strcpy(msg->mtext, "done");
-        msg->mtype = 6 + seat_num + shared_macros[1];
+        msg->mtype = seat_num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
         time_task_count += time_task;
 
-        if (((rand() % 100) <= 10) && pause_counter < shared_macros[4]) {
+        if (((rand() % 100) <= 10) && pause_counter < shared_macros->NOF_PAUSE) {
             pause_counter++;
             pause = true;
-            wait_semaphore(semid, seat_num);
+            wait_semaphore(semid, seat_num + num_sem);
             shared_seats[seat_num].busy = false;
             shared_seats[seat_num].worker_id = -1;
-            signal_semaphore(semid, seat_num);
+            signal_semaphore(semid, seat_num + num_sem);
         }
 
-        msgrcv(msgid, msg, sizeof(struct message), 2, IPC_NOWAIT);
     }
 
     usleep(500);
-    wait_semaphore(semid, shared_macros[1]);
+    wait_semaphore(semid, 4);
     update_stats(day, task, time_task_count, pause, wait_time);
-    signal_semaphore(semid, shared_macros[1]);
+    signal_semaphore(semid, 4);
 }
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num) {
     bool res = false;
-    for (int i = 0; i < shared_macros[1] && !res; i++) {
+    for (int i = 0; i < shared_macros->NOF_WORKERSEATS && !res; i++) {
         //printf("[worker %d] credo qui\n", getpid());
-        wait_semaphore(semid, i);
+        wait_semaphore(semid, i + num_sem);
         //printf("[worker %d] credo qua\n", getpid());
         if (shared_seats[i].task == task && !shared_seats[i].busy) {
             shared_seats[i].busy = true;
@@ -231,7 +231,7 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
             shared_seats[i].worker_id = id_worker;
             res = true;
         }
-        signal_semaphore(semid, i);
+        signal_semaphore(semid, i + num_sem);
     }
     return res;
 }
@@ -279,7 +279,7 @@ void update_stats(int day, int task, int task_time, bool pause, int wait_time){
     shared_tot_stats->num_worker_active++;
     shared_daily_stats[day].avg_num_pause_daily = (float)shared_daily_stats[day].num_pause_daily / shared_daily_stats[day].num_workers_active_daily;
 
-    for(int i = 0; i < shared_macros[1]; i++){
+    for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
     int current_task = shared_seats[i].task;
     int workers_for_task = shared_tot_stats->num_worker_per_task[current_task];
     shared_tot_stats->num_ratio_worker_user[i] = ratio_worker_seats(current_task, workers_for_task);
@@ -289,7 +289,7 @@ void update_stats(int day, int task, int task_time, bool pause, int wait_time){
 float ratio_worker_seats(int task, int num){
     
     int num_workerseats_per_task = 0;
-    for(int i = 0; i < shared_macros[1]; i++){
+    for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
         if(shared_seats[i].task == task){
             num_workerseats_per_task++;
         }

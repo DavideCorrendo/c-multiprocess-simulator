@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
         else if (pid > 0) {
             // Aggiorna contatore processi in modo sicuro
 
-            shared_data->processes_finished++; // Processi attesi
+            //shared_data->processes_finished++; // Processi attesi
 
         }
     }

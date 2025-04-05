@@ -5,6 +5,7 @@
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 #define N_NANO_SECS 10000000
+#define num_sem 6
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,11 +103,13 @@ typedef struct shared_data{
     int NOF_USERS;
     int current_day;
     int processes_finished;
+    int P_SERVE_MIN;
+    int P_SERVE_MAX;
+    int N_NEW_USERS;
 }shared_data;
 
 struct message {
     long mtype;
-    char mtext[10];
     int num;
 };
 
@@ -118,23 +121,14 @@ extern union semun {
 
 
 int leggi_parametro(const char *, const char *);
-int initSem(int semId, int value);
 int wait_semaphore(int semid, int sem_num);
 int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
-void get_function(int *, int *, int *, int *, int *, int *);
 void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_data_key, key_t *sem_key, key_t *msg_key);
-int num_user_waiting(int semid, shared_data *shared_macros);
-void signal_handler(int sig);
-void handle_child_exit(int sig);
-void handle_termination(int sig);
-void handle_pause(int sig);
-void handle_continue(int sig);
-void cleanup(void);
 void initialize_keys_modified(key_t  *shm_data_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);
-void change_msg(int *msgid);
 void reset_signals_to_default();
+void wait(int semid, int sem_num);
 
 #endif
