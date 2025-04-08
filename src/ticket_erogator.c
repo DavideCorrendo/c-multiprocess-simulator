@@ -80,6 +80,7 @@ int main() {
         wait_signal(semid, 0);
 
         while(get_semaphore_value(semid, 1) == 0){
+            puts("qui t.e.");
             msg.num = 0;
             //puts("ASPETTO");
             msgrcv_wait(msgid, &msg, sizeof(struct message) - sizeof(long), 0, semid);
@@ -89,6 +90,7 @@ int main() {
             msg.num = search_seat(msg.num, shared_seats, semid);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
+            msg.mtype = 1;
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
         }
 

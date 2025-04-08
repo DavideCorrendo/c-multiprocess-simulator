@@ -225,7 +225,7 @@ int main() {
         wait_processes();
         wait_semaphore(semid, 1);
         puts("wait_process finito");
-        print_stats(shared_macros->current_day);
+        //print_stats(shared_macros->current_day);
         reset_ipc();   
         puts("reset fatto");     
     }
