@@ -138,9 +138,9 @@ int main() {
 
             //printf("%d iniziato \n", getpid());
 
-            int P_SERV = rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1) + shared_macros->P_SERVE_MIN;//probabilty to go to the office
+            //int P_SERV = rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1) + shared_macros->P_SERVE_MIN;//probabilty to go to the office
             
-            int decision = rand() % 101;
+            //int decision = rand() % 101;
             int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
             int remaining_task = num_task;
             int *tasks = malloc(num_task * sizeof(int));
@@ -149,13 +149,13 @@ int main() {
                 tasks[i] = random_weighted(values, weights, size_r);
                 tasks_done[i] = false;
             }
-            int time = rand() % 480;
+            //int time = rand() % 480;---------
             //printf("[user: %d] qui\n", getpid());
             wait_signal(semid, 0); 
             //printf("[user: %d] qua\n", getpid());
-            usleep((time * N_NANO_SECS) / 1000);
+            //usleep((time * N_NANO_SECS) / 1000);--------------
             
-            if(decision <= P_SERV){
+            //if(decision <= P_SERV){
                 /*printf("[user %d] num_task: %d\n", getpid(), num_task);
                 for(int i = 0; i < num_task; i++){
                     printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
@@ -166,7 +166,7 @@ int main() {
                 wait_semaphore(semid, 4);
                 update_stats(num_task, remaining_task, day, tasks, tasks_done);
                 signal_semaphore(semid, 4);
-            }
+            //}
 
             wait_signal(semid, 1);
 
@@ -187,7 +187,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
 
     for(int i = 0; i < num_task && get_semaphore_value(semid, 1) == 0; i++){
 
-        msg->mtype = 0; 
+        msg->mtype = 1; 
         /*printf("[user %d] taks[%d] = %d\n", getpid(), i, tasks[i]);
 
         for(int j = 0; j < shared_macros[1]; j++){
@@ -197,27 +197,28 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msg->num = tasks[i];
         wait_semaphore(semid, 2);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        printf("mandato messaggio a t.e. : %d tipo: %ld\n", msg->num, msg->mtype);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);
+        printf("[user %d]mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
         printf("ricevuto messaggio da t.e. : %d\n", msg->num);
         signal_semaphore(semid, 2);
-        if(msg->num == -1){
+        if(msg->num == -2){
             //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
             continue;
         }
         
         seat_num = msg->num;
-        msg->mtype = seat_num + 2;
+        msg->mtype = seat_num + 3;
         msg->num = shared_macros->timer;
         //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
-        
+        puts("ASPETTO WAIT");
         wait_semaphore(semid, num_sem + seat_num);
+        puts("FINITO ASPETTO");
         //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         msg->num = shared_macros->timer - msg->num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 2, semid);
+        printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 3, semid);
         //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
         signal_semaphore(semid, num_sem + seat_num);
 

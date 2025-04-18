@@ -131,7 +131,6 @@ void reset_signals_to_default() {
 
 void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int semid){
     msg->num = -1;
-    msg->mtype = type;
     while(get_semaphore_value(semid,1) == 0 && msg->num == -1){
         msgrcv(msgid, msg, size, type, IPC_NOWAIT);
         usleep(500);

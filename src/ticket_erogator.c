@@ -82,15 +82,17 @@ int main() {
         while(get_semaphore_value(semid, 1) == 0){
             puts("qui t.e.");
             msg.num = 0;
-            //puts("ASPETTO");
-            msgrcv_wait(msgid, &msg, sizeof(struct message) - sizeof(long), 0, semid);
+            puts("ASPETTO");
+            msgrcv_wait(msgid, &msg, sizeof(struct message) - sizeof(long), 1, semid);
             printf("[ticket er.] preso task %d\n", msg.num);
 
-            if(msg.num == -1)break;
+            if(get_semaphore_value(semid, 1) == 1)break;
+            puts("cerco sedia");
             msg.num = search_seat(msg.num, shared_seats, semid);
+            printf("trovata sedia %d \n", msg.num);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
-            msg.mtype = 1;
+            msg.mtype = 2;
             msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0);
         }
 
@@ -110,10 +112,10 @@ int main() {
 
 int search_seat(int task, worker_seat *shared_seats, int semid){
     int min_users = INT_MAX;
-    int min_index = -1;
+    int min_index = -2;
 
     for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
-        wait_semaphore(semid, i); // Lock seat's data
+        wait_semaphore(semid, i + num_sem); // Lock seat's data
         if (shared_seats[i].busy && shared_seats[i].task == task) {
             int users_waiting = get_semaphore_value(semid, i);
             if (users_waiting < min_users) {
@@ -121,7 +123,7 @@ int search_seat(int task, worker_seat *shared_seats, int semid){
                 min_index = i;
             }
         }
-        signal_semaphore(semid, i); // Unlock seat's data
+        signal_semaphore(semid, i + num_sem); // Unlock seat's data
     }
 
     return min_index;
