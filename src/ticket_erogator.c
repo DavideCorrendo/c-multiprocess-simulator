@@ -76,20 +76,20 @@ int main() {
 
     while(get_semaphore_value(semid, 3) == 0){
 
-        puts("qui");
+        //puts("qui");
         wait_signal(semid, 0);
 
         while(get_semaphore_value(semid, 1) == 0){
-            puts("qui t.e.");
+            //puts("qui t.e.");
             msg.num = 0;
-            puts("ASPETTO");
+            //puts("ASPETTO");
             msgrcv_wait(msgid, &msg, sizeof(struct message) - sizeof(long), 1, semid);
-            printf("[ticket er.] preso task %d\n", msg.num);
+            //printf("[ticket er.] preso task %d\n", msg.num);
 
             if(get_semaphore_value(semid, 1) == 1)break;
-            puts("cerco sedia");
+            //puts("cerco sedia");
             msg.num = search_seat(msg.num, shared_seats, semid);
-            printf("trovata sedia %d \n", msg.num);
+            //printf("trovata sedia %d \n", msg.num);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
             msg.mtype = 2;

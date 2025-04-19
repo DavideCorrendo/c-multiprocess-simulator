@@ -193,14 +193,16 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
         printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 3, semid);
         if(msg->num == -1)break;
-        printf("[worker %d] ricevuto messaggio %d\n", getpid(), msg->num);
+        printf("[worker %d] ricevuto messaggio\n", getpid());
         wait_time += msg->num;
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;
+        //printf("time task (prima) = %f\n", time_task);
         time_task *= (float)avg_time_task;
+        //printf("time task (dopo) = %f\n", time_task);
         usleep((time_task * N_NANO_SECS) / 1000);
 
-        msg->mtype = seat_num + 3;
+        msg->mtype = (seat_num + shared_macros->NOF_WORKERSEATS) + 3;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
@@ -219,6 +221,7 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
 
     //usleep(500);
     wait_semaphore(semid, 4);
+    //printf("STATS: %d, %d\n", time_task_count, wait_time);
     update_stats(day, task, time_task_count, pause, wait_time);
     signal_semaphore(semid, 4);
 }

@@ -197,9 +197,9 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msg->num = tasks[i];
         wait_semaphore(semid, 2);
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        printf("[user %d]mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
+        printf("[user %d] mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
-        printf("ricevuto messaggio da t.e. : %d\n", msg->num);
+        if(msg->num != -2)printf("[user %d] ricevuto messaggio da t.e. : %d\n", getpid(), msg->num);
         signal_semaphore(semid, 2);
         if(msg->num == -2){
             //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
@@ -211,15 +211,15 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msg->num = shared_macros->timer;
         //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
-        puts("ASPETTO WAIT");
+        //puts("ASPETTO WAIT");
         wait_semaphore(semid, num_sem + seat_num);
-        puts("FINITO ASPETTO");
+        //puts("FINITO ASPETTO");
         //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros[2]);
         msg->num = shared_macros->timer - msg->num;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 3, semid);
-        //printf("[user %d] mandato num %d a sedia %d\n", getpid() ,msg->num, seat_num);
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), (seat_num + shared_macros->NOF_WORKERSEATS) + 3, semid);
+        printf("[user %d] ricevuto messaggio da worker %d\n", getpid(), msg->num);
         signal_semaphore(semid, num_sem + seat_num);
 
         //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
