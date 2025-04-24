@@ -190,10 +190,10 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
     int user_served = 0, time_task_count = 0, wait_time = 0;
 
     while (get_semaphore_value(semid, 1) == 0 && !pause) {
-        printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
+        //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 3, semid);
         if(msg->num == -1)break;
-        printf("[worker %d] ricevuto messaggio\n", getpid());
+        //printf("[worker %d] ricevuto messaggio\n", getpid());
         wait_time += msg->num;
 
         float time_task = ((float)rand() / RAND_MAX) + 0.5;

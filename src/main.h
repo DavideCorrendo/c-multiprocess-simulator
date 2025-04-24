@@ -4,7 +4,7 @@
 #define _GNU_SOURCE
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
-#define N_NANO_SECS 10000000
+#define N_NANO_SECS 100000
 #define num_sem 6
 
 #include <stdio.h>
