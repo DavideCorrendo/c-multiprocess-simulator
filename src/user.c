@@ -51,7 +51,7 @@ int main() {
         raise(SIGTERM);
     }
 
-    printf("[%d] user iniziato \n", getpid());
+    //printf("[%d] user iniziato \n", getpid());
 
     FILE *file = fopen("config_timeout.conf", "r");
     fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
@@ -199,7 +199,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d] mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
-        //if(msg->num != -2)printf("[user %d] ricevuto messaggio da t.e. : %d\n", getpid(), msg->num);
+        printf("[user %d] ricevuto messaggio da t.e. : %d\n", getpid(), msg->num);
         signal_semaphore(semid, 2);
         if(msg->num == -2){
             //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);

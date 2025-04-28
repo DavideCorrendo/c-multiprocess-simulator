@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    printf("[%d] worker iniziato \n", getpid());
+    //printf("[%d] worker iniziato \n", getpid());
 
     struct message msg;
 
@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
         wait_semaphore(semid, 5);
         shared_macros->processes_finished++;
         signal_semaphore(semid, 5);
-        printf("[worker %d] worker finito\n", getpid());
+        //printf("[worker %d] worker finito\n", getpid());
         
         
         msg.num = -1;
@@ -211,10 +211,10 @@ void working_time(int task, int avg_time_task, int seat_num, struct message *msg
         if (((rand() % 100) <= 10) && pause_counter < shared_macros->NOF_PAUSE) {
             pause_counter++;
             pause = true;
-            wait_semaphore(semid, seat_num + num_sem);
+            wait_semaphore(semid, 6);
             shared_seats[seat_num].busy = false;
             shared_seats[seat_num].worker_id = -1;
-            signal_semaphore(semid, seat_num + num_sem);
+            signal_semaphore(semid, 6);
         }
 
     }

@@ -4,7 +4,7 @@ static shared_data *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;
 
 void cleanup_resources();
-int search_seat(int task, worker_seat *shared_seats, int semid);
+int search_seat(int task, worker_seat *shared_seats, int semid, int *seat_visits);
 
 void signal_handler(int sig) {
     struct sigaction sa;
@@ -38,7 +38,7 @@ int main() {
         raise(SIGTERM);
     }
 
-    printf("[%d] ticket er. iniziato \n", getpid());
+    //printf("[%d] ticket er. iniziato \n", getpid());
 
     struct message msg;
 
@@ -74,10 +74,16 @@ int main() {
     }
     shared_seats = shmat(shmid_seats, NULL, 0);
 
+    int *seat_visits = calloc(shared_macros->NOF_WORKERSEATS, sizeof(int));
+
     while(get_semaphore_value(semid, 3) == 0){
 
         //puts("qui");
         wait_signal(semid, 0);
+
+        for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            seat_visits[i] = 0;
+        }
 
         while(get_semaphore_value(semid, 1) == 0){
             //puts("qui t.e.");
@@ -88,7 +94,7 @@ int main() {
 
             if(get_semaphore_value(semid, 1) == 1)break;
             //puts("cerco sedia");
-            msg.num = search_seat(msg.num, shared_seats, semid);
+            msg.num = search_seat(msg.num, shared_seats, semid, seat_visits);
             //printf("trovata sedia %d \n", msg.num);
             //if(msg.num != -1)printf("[tick. er.] OCCUPATO E %d\n", shared_seats[msg.num].busy);
             //printf("EROGATOR MANDA %d\n", msg.num);
@@ -110,22 +116,20 @@ int main() {
 
 }
 
-int search_seat(int task, worker_seat *shared_seats, int semid){
+int search_seat(int task, worker_seat *shared_seats, int semid, int seat_visits[]){
     int min_users = INT_MAX;
     int min_index = -2;
 
-    for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
-        wait_semaphore(semid, i + num_sem); // Lock seat's data
-        if (shared_seats[i].busy && shared_seats[i].task == task) {
-            int users_waiting = get_semaphore_value(semid, i);
-            if (users_waiting < min_users) {
-                min_users = users_waiting;
-                min_index = i;
-            }
+    wait_semaphore(semid, 6); 
+    for (int i = task; i < shared_macros->NOF_WORKERSEATS; i = i + 6) {
+        if (shared_seats[i].busy && seat_visits[i] < min_users) {
+            min_users = seat_visits[i];
+            min_index = i;
         }
-        signal_semaphore(semid, i + num_sem); // Unlock seat's data
     }
+    signal_semaphore(semid, 6);
 
+    seat_visits[min_index]++;
     return min_index;
 }
 
