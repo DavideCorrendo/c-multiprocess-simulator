@@ -75,6 +75,10 @@ int main() {
     shared_seats = shmat(shmid_seats, NULL, 0);
 
     int *seat_visits = calloc(shared_macros->NOF_WORKERSEATS, sizeof(int));
+    int avg_time_tasks[6] = TIMES_ARRAY;
+    float time_task;
+
+    srand((time(NULL)) + getpid());
 
     while(get_semaphore_value(semid, 3) == 0){
 
@@ -91,6 +95,8 @@ int main() {
             //puts("ASPETTO");
             msgrcv_wait(msgid, &msg, sizeof(struct message) - sizeof(long), 1, semid);
             //printf("[ticket er.] preso task %d\n", msg.num);
+            time_task = 0.5 + (float)rand() / RAND_MAX;
+            msg.time = time_task * avg_time_tasks[msg.num];
 
             if(get_semaphore_value(semid, 1) == 1)break;
             //puts("cerco sedia");

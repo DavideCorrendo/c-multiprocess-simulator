@@ -166,13 +166,16 @@ int main() {
                 wait_semaphore(semid, 4);
                 update_stats(num_task, remaining_task, day, tasks, tasks_done);
                 signal_semaphore(semid, 4);
+
+                wait_semaphore(semid, 5);
+                shared_macros->processes_finished++;
+                shared_macros->USER_FINISHED++;
+                signal_semaphore(semid, 5);
             //}
 
             wait_signal(semid, 1);
 
-            wait_semaphore(semid, 5);
-            shared_macros->processes_finished++;
-            signal_semaphore(semid, 5);
+           
         }
     
     reset_signals_to_default();
@@ -199,7 +202,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d] mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
-        printf("[user %d] ricevuto messaggio da t.e. : %d\n", getpid(), msg->num);
+        //printf("[user %d] ricevuto messaggio da t.e. : %d tempo: %.10f\n", getpid(), msg->num, msg->time);
         signal_semaphore(semid, 2);
         if(msg->num == -2){
             //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);

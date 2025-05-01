@@ -150,6 +150,7 @@ int main() {
     shared_macros->NOF_USERS = NOF_USERS;
     shared_macros->P_SERVE_MIN = P_SERVE_MIN;
     shared_macros->P_SERVE_MAX = P_SERVE_MAX;
+    shared_macros->USER_FINISHED = 0;
 
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
@@ -215,7 +216,8 @@ int main() {
         puts("task_assignment fatto");
         signal_semaphore(semid, 0);
         simulate_day();
-        if(((shared_macros->NOF_WORKERS+shared_macros->NOF_USERS) - shared_macros->processes_finished) >= EXPLODE_THRESHOLD){
+        printf("NOF_USER_NOT_FINISHED = %d \n", shared_macros->NOF_USERS - shared_macros->USER_FINISHED);
+        if((shared_macros->NOF_USERS - shared_macros->USER_FINISHED) >= EXPLODE_THRESHOLD){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
@@ -483,6 +485,7 @@ void tasks_assignment() {
 int reset_ipc() {
 
     shared_macros->processes_finished = 0;
+    shared_macros->USER_FINISHED = 0;
 
     /*union semun {
         int val;

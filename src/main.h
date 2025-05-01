@@ -4,7 +4,7 @@
 #define _GNU_SOURCE
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
-#define N_NANO_SECS 1500000
+#define N_NANO_SECS 10000000
 #define num_sem 6
 
 #include <stdio.h>
@@ -105,12 +105,13 @@ typedef struct shared_data{
     int processes_finished;
     int P_SERVE_MIN;
     int P_SERVE_MAX;
-    int N_NEW_USERS;
+    int USER_FINISHED;
 }shared_data;
 
 struct message {
     long mtype;
     int num;
+    float time;
 };
 
 extern union semun {
