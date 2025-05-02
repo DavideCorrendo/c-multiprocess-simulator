@@ -1,6 +1,7 @@
 #include "main.h"
 
-static int msgid = -1;
+static int ticket_msgid = -1;      
+static int *worker_msgids = NULL; 
 static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
@@ -8,7 +9,7 @@ static worker_seat *shared_seats = NULL;
 static shared_data *shared_macros = NULL;
 int SIM_DURATION;
 
-void office_time(struct message *msg, int msgid, int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]);
+void office_time(struct message *msg, int msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]);
 void task_time(struct message msg, int msgid, int semid, int worker_id, int seat_num, bool *end_day);
 void cleanup_resources();
 int random_weighted(int values[], int weights[], int size);
@@ -55,7 +56,7 @@ int main() {
 
     struct message msg;
 
-    initialize_IPC(&msgid, &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
+    initialize_IPC(&ticket_msgid, &worker_msgids , &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
 
     srand(time(NULL) + getpid());
 
@@ -95,7 +96,7 @@ int main() {
                 }*/
                 day = shared_macros->current_day; 
 
-                office_time(&msg, msgid, tasks, semid, &remaining_task, num_task, tasks_done);
+                office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
                 wait_semaphore(semid, 4);
                 update_stats(num_task, remaining_task, day, tasks, tasks_done);
                 signal_semaphore(semid, 4);
@@ -117,7 +118,7 @@ int main() {
     return 1;
 }
 
-void office_time(struct message *msg, int msgid, int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]) {
+void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]) {
     
     int seat_num;
 
@@ -132,9 +133,9 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
 
         msg->num = tasks[i];
         wait_semaphore(semid, 2);
-        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        msgsnd(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d] mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
+        msgrcv_wait(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
         //printf("[user %d] ricevuto messaggio da t.e. : %d tempo: %.10f\n", getpid(), msg->num, msg->time);
         signal_semaphore(semid, 2);
         if(msg->num == -2){
@@ -143,7 +144,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         }
         
         seat_num = msg->num;
-        msg->mtype = seat_num + 3;
+        msg->mtype = 1;
         msg->num = shared_macros->timer;
         //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros->timer);
         //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
@@ -152,9 +153,9 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         //puts("FINITO ASPETTO");
         //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros->timer);
         msg->num = shared_macros->timer - msg->num;
-        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
+        msgsnd(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), (seat_num + shared_macros->NOF_WORKERSEATS) + 3, semid);
+        msgrcv_wait(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 2, semid);
         //printf("[user %d] ricevuto messaggio da worker %d\n", getpid (), msg->num);
         signal_semaphore(semid, num_sem + seat_num);
 

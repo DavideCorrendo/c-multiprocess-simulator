@@ -5,7 +5,8 @@ void working_time(int task, int id_worker, struct message *msg, int msgid, int s
 void update_stats(int day, int task, int task_time, bool pause, int wait_time);
 float ratio_worker_seats(int index, int num);
 
-static int msgid = -1;
+static int ticket_msgid = -1;      
+static int *worker_msgids = NULL; 
 static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
@@ -53,7 +54,7 @@ int main(int argc, char *argv[]) {
     fclose(file);
 
     //initializing all IPC structures of worker
-    initialize_IPC(&msgid, &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
+    initialize_IPC(&ticket_msgid, &worker_msgids , &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
 
     int pause_counter = 0;
     memset(&msg, 0, sizeof(msg));
@@ -81,7 +82,7 @@ int main(int argc, char *argv[]) {
             sleep(1);
         }
         //printf("[worker %d] findseat finita end = %d\n", getpid(), end);
-        if(end == false)working_time(task, seat_num, &msg, msgid, semid, pause_counter, day);
+        if(end == false)working_time(task, seat_num, &msg, worker_msgids[seat_num], semid, pause_counter, day);
 
         wait_semaphore(semid, 5);
         shared_macros->processes_finished++;
@@ -114,7 +115,7 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
 
     while (get_semaphore_value(semid, 1) == 0 && !pause) {
         //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), seat_num + 3, semid);
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);
         if(msg->num == -1)break;
         //printf("[worker %d] ricevuto messaggio\n", getpid());
         wait_time += msg->num;
@@ -122,7 +123,7 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
         
         usleep((time_task * N_NANO_SECS) / 1000);
 
-        msg->mtype = (seat_num + shared_macros->NOF_WORKERSEATS) + 3;
+        msg->mtype = 2;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;

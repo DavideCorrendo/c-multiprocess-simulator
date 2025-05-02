@@ -127,7 +127,7 @@ int wait_semaphore(int semid, int sem_num);
 int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);
 int get_semaphore_value(int semid, int sem_num);
-void initialize_IPC(int *msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros);  
+void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros);  
 void initialize_keys_modified(key_t  *shm_data_key,key_t  *sem_key,key_t *msg_key, key_t *shm_seats_key);
 int sem_operation(int semid, int sem_num, int op_value);
 void reset_signals_to_default();

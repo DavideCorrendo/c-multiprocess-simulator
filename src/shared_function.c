@@ -93,25 +93,24 @@ int get_semaphore_value(int semid, int sem_num) {
 }
 
 // Initializes shared memory keys
-void initialize_IPC(int *msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros){    
+void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros){    
     key_t shm_daily_stat_key;
     key_t shm_tot_stat_key;
     key_t shm_seats_key;
     key_t shm_macros_key;
     key_t sem_key;
-    key_t msg_key;
     
     shm_daily_stat_key = ftok("/tmp", 'A');
     shm_tot_stat_key = ftok("/tmp", 'B');
     shm_seats_key = ftok("/tmp", 'C');
     shm_macros_key = ftok("/tmp", 'D');
     sem_key = ftok("/tmp", 'E');
-    msg_key = ftok("/tmp", 'F');
+    key_t ticket_key = ftok("/tmp", 'F');
 
     int shmid_macros, shmid_daily_stats, shmid_tot_stats, shmid_seats;
 
     if (shm_daily_stat_key == -1 || shm_tot_stat_key == -1 || shm_seats_key == -1 ||
-        shm_macros_key == -1 || sem_key == -1 || msg_key == -1) {
+        shm_macros_key == -1 || sem_key == -1 || ticket_key == -1) {
         perror("ftok failed");
         exit(EXIT_FAILURE);
     }
@@ -166,10 +165,16 @@ void initialize_IPC(int *msgid, int *semid, daily_stats **shared_daily_stats, to
         raise(SIGTERM);
     }
 
-    *msgid = msgget(msg_key, 0);
-    if(*msgid == -1){
+    *msgid_ticket = msgget(ticket_key, 0);
+    if(*msgid_ticket == -1){
         perror("msgget");
         raise(SIGTERM);
+    }
+
+    *msgid = malloc((*shared_macros)->NOF_WORKERSEATS * sizeof(int));
+    for (int i = 0; i < (*shared_macros)->NOF_WORKERSEATS; i++) {
+        key_t msgworker_key = ftok("/tmp", 'G' + i);
+        msgid[i] = msgget(msgworker_key, IPC_CREAT | 0666);
     }
 
 }

@@ -21,7 +21,8 @@ static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
 static int shmid_seats = -1;
 static int shmid_macros = -1;
-static int msgid = -1;
+static int ticket_msgid = -1;      
+static int *worker_msgids = NULL; 
 static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
@@ -235,7 +236,7 @@ int main() {
 
     puts("FINITO TUTTO");
 
-    print_file_stats();
+    //print_file_stats();
 
     reset_signals_to_default();
     puts("resettato");
@@ -254,14 +255,13 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
     key_t shm_seats_key;
     key_t shm_macros_key;
     key_t sem_key;
-    key_t msg_key;
 
     shm_daily_stat_key = ftok("/tmp", 'A');
     shm_tot_stat_key = ftok("/tmp", 'B');
     shm_seats_key = ftok("/tmp", 'C');
     shm_macros_key = ftok("/tmp", 'D');
     sem_key = ftok("/tmp", 'E');
-    msg_key = ftok("/tmp", 'F');
+    key_t ticket_msg_key = ftok("/tmp", 'F'); 
 
     // Create shared memory segments for the actual structures, not pointers
     shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), IPC_CREAT | 0666);
@@ -313,10 +313,22 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
         raise(SIGTERM);
     }
 
-    msgid = msgget(msg_key, IPC_CREAT | 0666);
-    if (msgid == -1) {
-        perror("msgget failed in director");
+    ticket_msgid = msgget(ticket_msg_key, IPC_CREAT | 0666);
+    if (ticket_msgid == -1) {
+        perror("msgget (ticket) failed");
         raise(SIGTERM);
+    }
+
+    // Create worker seat queues
+    worker_msgids = malloc(NOF_WORKERSEATS * sizeof(int));
+    for (int i = 0; i < NOF_WORKERSEATS; i++) {
+        key_t worker_msg_key = ftok("/tmp", 'G' + i); // Unique key per seat
+        worker_msgids[i] = msgget(worker_msg_key, IPC_CREAT | 0666);
+        if (worker_msgids[i] == -1) {
+            perror("msgget (worker seat) failed");
+            cleanup(); // Cleanup existing queues before exiting
+            exit(EXIT_FAILURE);
+        }
     }
 
     semid = semget(sem_key, NOF_WORKERSEATS + num_sem, IPC_CREAT | 0666);
@@ -369,9 +381,9 @@ void print_stats(int day){
     printf("average number of pause daily: %.2f\n", shared_daily_stats[day].avg_num_pause_daily);
     printf("number of pause during simulation: %d\n", shared_tot_stats->num_pause);
     
-    for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
+    /*for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
         printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_tot_stats->num_ratio_worker_user[i]);
-    }
+    }*/
 
 }
 
@@ -491,12 +503,30 @@ int reset_ipc() {
 
     shared_macros->processes_finished = 0;
     shared_macros->USER_FINISHED = 0;
+    struct message msg;
 
-    /*union semun {
-        int val;
-        struct semid_ds *buf;
-        unsigned short *array;
-    } sem_union;*/
+    while (1) {
+        ssize_t ret = msgrcv(ticket_msgid, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT);
+        if (ret == -1) {
+            if (errno == ENOMSG) break; // No more messages
+            perror("msgrcv (ticket) failed");
+            break;
+        }
+    }
+
+    // Clear worker seat queues
+    if (worker_msgids != NULL) {
+        for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            while (1) {
+                ssize_t ret = msgrcv(worker_msgids[i], &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT);
+                if (ret == -1) {
+                    if (errno == ENOMSG) break; // No more messages
+                    perror("msgrcv (worker seat) failed");
+                    break;
+                }
+            }
+        }
+    }
     
     shared_macros->timer = 0;
 
@@ -543,7 +573,24 @@ if (child_pids != NULL) {
     shmctl(shmid_seats, IPC_RMID, NULL);
     printf("shm [id:%d] removed\n", shmid_seats);
 
-    msgctl(msgid, IPC_RMID, NULL);
+    
+    // Remove ticket queue
+    if (msgctl(ticket_msgid, IPC_RMID, NULL) == -1) {
+        perror("msgctl (ticket) failed");
+    }
+
+    // Remove worker seat queues
+    if (worker_msgids != NULL) {
+        for (int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            if (msgctl(worker_msgids[i], IPC_RMID, NULL) == -1) {
+                perror("msgctl (worker seat) failed");
+            }
+        }
+        free(worker_msgids);
+        worker_msgids = NULL;
+    }
+
+
     semctl(semid, 0, IPC_RMID);
 
     if (fp != NULL) {
@@ -556,14 +603,8 @@ void wait_processes(){
     printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros->NOF_WORKERS, shared_macros->NOF_USERS);
 
     // Get message queue statistics
-    /*struct msqid_ds queue_info;
-    if (msgctl(msgid, IPC_STAT, &queue_info) == -1) {
-        perror("msgctl failed");
-    } else {
-        printf("Messages in queue: %lu\n", (unsigned long)queue_info.msg_qnum);
-        printf("Max queue bytes: %lu\n", (unsigned long)queue_info.msg_qbytes);
-        printf("Current queue size: %lu bytes\n", (unsigned long)queue_info.msg_cbytes);
-    }*/
+    //struct msqid_ds queue_info;
+    
 
     while(1) {
         if(shared_macros->processes_finished == shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1) break;
