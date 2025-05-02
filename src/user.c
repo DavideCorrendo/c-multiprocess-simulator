@@ -210,10 +210,6 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     shared_tot_stats->num_task_done += (num_task - remaining_task);
     shared_tot_stats->num_task_not_done += remaining_task;
 
-    if(shared_daily_stats[day].user_served_daily > 0){shared_daily_stats[day].avg_num_users_daily = (float)shared_daily_stats[day].user_served_daily / shared_macros->NOF_WORKERS;}
-    if(shared_daily_stats[day].task_done > 0) shared_daily_stats[day].avg_num_tasks_done_daily = (float)shared_daily_stats[day].task_done / shared_macros->NOF_WORKERS;
-    if(shared_daily_stats[day].task_not_done > 0)shared_daily_stats[day].avg_num_tasks_not_done_daily = (float)shared_daily_stats[day].task_not_done / shared_macros->NOF_WORKERS;
-
     for(int i = 0; i < num_task; i++){
         if(tasks_done[i]){
             shared_daily_stats[day].user_served_per_task[tasks[i]]++;

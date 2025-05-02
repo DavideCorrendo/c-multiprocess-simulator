@@ -172,9 +172,9 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
     }
 
     *msgid = malloc((*shared_macros)->NOF_WORKERSEATS * sizeof(int));
-    for (int i = 0; i < (*shared_macros)->NOF_WORKERSEATS; i++) {
+    for (int i = 0; i < (*shared_macros)->NOF_WORKERSEATS; i++){
         key_t msgworker_key = ftok("/tmp", 'G' + i);
-        msgid[i] = msgget(msgworker_key, IPC_CREAT | 0666);
+        (*msgid)[i] = msgget(msgworker_key, IPC_CREAT | 0666);
     }
 
 }

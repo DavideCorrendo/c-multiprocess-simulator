@@ -42,28 +42,15 @@ typedef struct daily_stats{
     int daily_waiting_time;//
     int time_task_daily;//
 
-    float avg_num_users_daily;
-    float avg_num_tasks_done_daily;
-    float avg_num_tasks_not_done_daily;
-    float avg_time_users_wait_daily;
-    float avg_time_tasks_done_daily;
-
     int user_served_per_task[6];//
     int task_done_per_task[6];//
     int task_not_done_per_task[6];//
     int time_task_daily_per_task[6];//
     int time_wait_daily_per_task[6];//
 
-    float avg_num_users_daily_per_task[6];
-    float avg_num_tasks_done_daily_per_task[6];
-    float avg_num_tasks_not_done_daily_per_task[6];
-    float avg_time_users_wait_daily_per_task[6];
-    float avg_time_tasks_done_daily_per_task[6];
-
     int num_pause_daily;
 
     int num_workers_active_daily;
-    float avg_num_pause_daily;
 
 }daily_stats;
 
@@ -75,8 +62,6 @@ typedef struct tot_stats{
     int num_user_served;
     int num_task_done;
     int num_task_not_done;
-    float avg_time_wait;
-    float avg_time_task;
 
     int num_worker_per_task[6];
     int wait_time_per_task[6];//
@@ -85,8 +70,6 @@ typedef struct tot_stats{
     int num_user_served_per_task[6];
     int num_task_done_per_task[6];
     int num_task_not_done_per_task[6];
-    float avg_time_wait_per_task[6];
-    float avg_time_task_per_task[6];
 
     int num_worker_active;
     int num_pause;

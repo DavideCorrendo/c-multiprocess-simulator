@@ -165,52 +165,33 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
 }
 
 void update_stats(int day, int task, int task_time, bool pause, int wait_time){
-
-    int num = shared_tot_stats->num_worker_per_task[task];
     
     shared_daily_stats[day].daily_waiting_time += wait_time;
     shared_daily_stats[day].time_wait_daily_per_task[task] += wait_time;
 
     //WAIT TIME
     shared_tot_stats->wait_time += wait_time;
-    if(shared_tot_stats->num_task_done != 0)shared_tot_stats->avg_time_wait = (float)shared_tot_stats->wait_time / shared_tot_stats->num_task_done;
     shared_tot_stats->wait_time_per_task[task] += wait_time;
 
     //TIME TASK
     shared_daily_stats[day].time_task_daily += task_time;
     shared_daily_stats[day].time_task_daily_per_task[task] += task_time;
-    if(shared_daily_stats[day].task_done_per_task[task] != 0)shared_daily_stats[day].avg_time_tasks_done_daily_per_task[task] = (float)shared_daily_stats[day].time_task_daily_per_task[task] / shared_daily_stats[day].task_done_per_task[task];
 
     shared_tot_stats->task_time += task_time;
-    if(shared_tot_stats->num_task_done != 0)shared_tot_stats->avg_time_task = (float)shared_tot_stats->task_time / shared_tot_stats->num_task_done;
     shared_tot_stats->task_time_per_task[task] += task_time;
-    if(shared_tot_stats->num_task_done_per_task[task] != 0)shared_tot_stats->avg_time_task_per_task[task] = (float)shared_tot_stats->task_time_per_task[task] / shared_tot_stats->num_task_done_per_task[task];
-
-    if(shared_daily_stats[day].task_done != 0)shared_daily_stats[day].avg_time_users_wait_daily = (float)shared_daily_stats[day].daily_waiting_time / shared_daily_stats[day].task_done;
-    if(shared_daily_stats[day].task_done != 0)shared_daily_stats[day].avg_time_tasks_done_daily = (float)shared_daily_stats[day].time_task_daily / shared_daily_stats[day].task_done;
     
     if(pause == true){
         shared_daily_stats[day].num_pause_daily++;
         shared_tot_stats->num_pause++;
     }
 
-    if(shared_daily_stats[day].task_done_per_task[task] != 0)shared_daily_stats[day].avg_time_users_wait_daily_per_task[task] = shared_daily_stats[day].time_wait_daily_per_task[task] / shared_daily_stats[day].task_done_per_task[task];
-    if(shared_tot_stats->num_task_done_per_task[task] != 0)shared_tot_stats->avg_time_wait_per_task[task] =  (float)shared_tot_stats->wait_time_per_task[task] / shared_tot_stats->num_task_done_per_task[task];
-
-    if(num != 0){
-        shared_daily_stats[day].avg_num_users_daily_per_task[task] = (float)shared_daily_stats[day].user_served_per_task[task] / num;
-        shared_daily_stats[day].avg_num_tasks_done_daily_per_task[task] = (float)shared_daily_stats[day].task_done_per_task[task] / num;
-        shared_daily_stats[day].avg_num_tasks_not_done_daily_per_task[task] = (float)shared_daily_stats[day].task_not_done_per_task[task] / num;
-    }
-
     shared_daily_stats[day].num_workers_active_daily++;
     shared_tot_stats->num_worker_active++;
-    shared_daily_stats[day].avg_num_pause_daily = (float)shared_daily_stats[day].num_pause_daily / shared_daily_stats[day].num_workers_active_daily;
 
     for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
-    int current_task = shared_seats[i].task;
-    int workers_for_task = shared_tot_stats->num_worker_per_task[current_task];
-    shared_tot_stats->num_ratio_worker_user[i] = ratio_worker_seats(current_task, workers_for_task);
+        int current_task = shared_seats[i].task;
+        int workers_for_task = shared_tot_stats->num_worker_per_task[current_task];
+        shared_tot_stats->num_ratio_worker_user[i] = ratio_worker_seats(current_task, workers_for_task);
     }
 }
 
@@ -225,8 +206,4 @@ float ratio_worker_seats(int task, int num){
 
     if(num_workerseats_per_task != 0)return (float)num / num_workerseats_per_task;
     return 0;
-}
-
-void get(){
-    
 }
