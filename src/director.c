@@ -151,6 +151,7 @@ int main() {
     shared_macros->P_SERVE_MIN = P_SERVE_MIN;
     shared_macros->P_SERVE_MAX = P_SERVE_MAX;
     shared_macros->USER_FINISHED = 0;
+    shared_macros->SIM_DURATION = SIM_DURATION;
 
 
     for(int i = 0; i < NOF_WORKERSEATS; i++) {
@@ -255,8 +256,12 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
     key_t sem_key;
     key_t msg_key;
 
-    initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
-
+    shm_daily_stat_key = ftok("/tmp", 'A');
+    shm_tot_stat_key = ftok("/tmp", 'B');
+    shm_seats_key = ftok("/tmp", 'C');
+    shm_macros_key = ftok("/tmp", 'D');
+    sem_key = ftok("/tmp", 'E');
+    msg_key = ftok("/tmp", 'F');
 
     // Create shared memory segments for the actual structures, not pointers
     shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), IPC_CREAT | 0666);
@@ -314,7 +319,7 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
         raise(SIGTERM);
     }
 
-    semid = semget(sem_key, 100, IPC_CREAT | 0666);
+    semid = semget(sem_key, NOF_WORKERSEATS + num_sem, IPC_CREAT | 0666);
     if(semid == -1) {
         perror("semget");
         exit(1);

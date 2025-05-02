@@ -93,19 +93,85 @@ int get_semaphore_value(int semid, int sem_num) {
 }
 
 // Initializes shared memory keys
-void initialize_keys(key_t *shm_daily_stat_key, key_t *shm_tot_stat_key, key_t *shm_seats_key, key_t *shm_data_key, key_t *sem_key, key_t *msg_key) {   //<------------da controllare------------------>
-    *shm_daily_stat_key = ftok("/tmp", 'A');
-    *shm_tot_stat_key = ftok("/tmp", 'B');
-    *shm_seats_key = ftok("/tmp", 'C');
-    *shm_data_key = ftok("/tmp", 'D');
-    *sem_key = ftok("/tmp", 'E');
-    *msg_key = ftok("/tmp", 'F');
+void initialize_IPC(int *msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros){    
+    key_t shm_daily_stat_key;
+    key_t shm_tot_stat_key;
+    key_t shm_seats_key;
+    key_t shm_macros_key;
+    key_t sem_key;
+    key_t msg_key;
+    
+    shm_daily_stat_key = ftok("/tmp", 'A');
+    shm_tot_stat_key = ftok("/tmp", 'B');
+    shm_seats_key = ftok("/tmp", 'C');
+    shm_macros_key = ftok("/tmp", 'D');
+    sem_key = ftok("/tmp", 'E');
+    msg_key = ftok("/tmp", 'F');
 
-    if (*shm_daily_stat_key == -1 || *shm_tot_stat_key == -1 || *shm_seats_key == -1 ||
-        *shm_data_key == -1 || *sem_key == -1 || *msg_key == -1) {
+    int shmid_macros, shmid_daily_stats, shmid_tot_stats, shmid_seats;
+
+    if (shm_daily_stat_key == -1 || shm_tot_stat_key == -1 || shm_seats_key == -1 ||
+        shm_macros_key == -1 || sem_key == -1 || msg_key == -1) {
         perror("ftok failed");
         exit(EXIT_FAILURE);
     }
+
+    shmid_macros = shmget(shm_macros_key, sizeof(shared_data), 0); 
+    if(shmid_macros == -1){
+        perror("shmget in worker for macros");
+        raise(SIGTERM);
+    }
+    *shared_macros = shmat(shmid_macros, NULL, 0);
+    if (shared_macros == (void *)-1) {
+        perror("shmat failed for macros in worker");
+        raise(SIGTERM);
+    }
+
+    shmid_daily_stats = shmget(shm_daily_stat_key, (*shared_macros)->SIM_DURATION * sizeof(daily_stats), 0);
+    if(shmid_daily_stats == -1){
+        perror("shmget in worker for daily stats");
+        raise(SIGTERM);
+    }
+    *shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
+    if (shared_daily_stats == (void *)-1) {
+        perror("shmat failed for stats in worker");
+        raise(SIGTERM);
+    }
+
+    shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
+    if(shmid_tot_stats == -1){
+        perror("shmget in worker for tot stats");
+        raise(SIGTERM);
+    }
+    *shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
+    if (*shared_tot_stats == (void *)-1) {
+        perror("shmat failed for stats in worker");
+        raise(SIGTERM);
+    }
+
+    shmid_seats = shmget(shm_seats_key, (*shared_macros)->NOF_WORKERSEATS * sizeof(worker_seat), 0);
+    if(shmid_seats == -1){
+        perror("shmget in worker for seats");
+        raise(SIGTERM);
+    }
+    *shared_seats = shmat(shmid_seats, NULL, 0);
+    if (shared_seats == (void *)-1) {
+        perror("shmat failed for seats in workerg");
+        raise(SIGTERM);
+    }
+
+    *semid = semget(sem_key, (*shared_macros)->NOF_WORKERSEATS + num_sem, 0);
+    if(*semid == -1){
+        perror("semid");
+        raise(SIGTERM);
+    }
+
+    *msgid = msgget(msg_key, 0);
+    if(*msgid == -1){
+        perror("msgget");
+        raise(SIGTERM);
+    }
+
 }
 
 // Initializes a modified set of keys (example placeholder)

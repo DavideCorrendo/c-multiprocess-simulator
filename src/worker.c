@@ -5,10 +5,6 @@ void working_time(int task, int id_worker, struct message *msg, int msgid, int s
 void update_stats(int day, int task, int task_time, bool pause, int wait_time);
 float ratio_worker_seats(int index, int num);
 
-static int shmid_daily_stats = -1;
-static int shmid_tot_stats = -1;
-static int shmid_seats = -1;
-static int shmid_macros = -1;
 static int msgid = -1;
 static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
@@ -38,7 +34,7 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    //printf("[%d] worker iniziato \n", getpid());  ------
+    //printf("[%d] worker iniziato \n", getpid()); 
 
     struct message msg;
     int id_worker = atoi(argv[1]);
@@ -51,71 +47,13 @@ int main(int argc, char *argv[]) {
 
     srand((time(NULL)) + getpid());
     int task = rand() % 6;
-    
-    key_t shm_daily_stat_key;
-    key_t shm_tot_stat_key;
-    key_t shm_seats_key;
-    key_t shm_macros_key;
-    key_t sem_key;
-    key_t msg_key;
 
     FILE *file = fopen("config_timeout.conf", "r");
     fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
     fclose(file);
 
     //initializing all IPC structures of worker
-    initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
-
-    shmid_macros = shmget(shm_macros_key, sizeof(int) * 9, 0); 
-    if(shmid_macros == -1){
-        perror("shmget in worker for macros");
-        raise(SIGTERM);
-    }
-    shared_macros = shmat(shmid_macros, NULL, 0);
-    if (shared_macros == (void *)-1) {
-        perror("shmat failed for macros in worker");
-        raise(SIGTERM);
-    }
-    shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), 0);
-    if(shmid_daily_stats == -1){
-        perror("shmget in worker for daily stats");
-        raise(SIGTERM);
-    }
-    shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
-    if (shared_daily_stats == (void *)-1) {
-        perror("shmat failed for stats in worker");
-        raise(SIGTERM);
-    }
-    shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
-    if(shmid_tot_stats == -1){
-        perror("shmget in worker for tot stats");
-        raise(SIGTERM);
-    }
-    shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
-    if (shared_tot_stats == (void *)-1) {
-        perror("shmat failed for stats in worker");
-        raise(SIGTERM);
-    }
-    shmid_seats = shmget(shm_seats_key, shared_macros->NOF_WORKERSEATS, 0);
-    if(shmid_seats == -1){
-        perror("shmget in worker for seats");
-        raise(SIGTERM);
-    }
-    shared_seats = shmat(shmid_seats, NULL, 0);
-    if (shared_seats == (void *)-1) {
-        perror("shmat failed for seats in workerg");
-        raise(SIGTERM);
-    }
-    semid = semget(sem_key, 100, 0);
-    if(semid == -1){
-        perror("semid");
-        raise(SIGTERM);
-    }
-    msgid = msgget(msg_key, 0);
-    if(msgid == -1){
-        perror("msgget");
-        raise(SIGTERM);
-    }
+    initialize_IPC(&msgid, &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
 
     int pause_counter = 0;
     memset(&msg, 0, sizeof(msg));

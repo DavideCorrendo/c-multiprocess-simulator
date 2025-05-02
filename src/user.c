@@ -1,9 +1,5 @@
 #include "main.h"
 
-static int shmid_daily_stats = -1;
-static int shmid_tot_stats = -1;
-static int shmid_seats = -1;
-static int shmid_macros = -1;
 static int msgid = -1;
 static int semid = -1;
 static daily_stats *shared_daily_stats = NULL;
@@ -59,70 +55,7 @@ int main() {
 
     struct message msg;
 
-    key_t shm_daily_stat_key;
-    key_t shm_tot_stat_key;
-    key_t shm_seats_key;
-    key_t shm_macros_key;
-    key_t sem_key;
-    key_t msg_key;
-
-    initialize_keys(&shm_daily_stat_key, &shm_tot_stat_key, &shm_seats_key, &shm_macros_key, &sem_key, &msg_key);
-
-    shmid_macros = shmget(shm_macros_key, sizeof(shared_data), 0);    //<-------------------da controllare sostituito con NUM_MACROS------------>
-    if(shmid_macros == -1){
-        perror("shmget in worker");
-        raise(SIGTERM);
-    }
-    shared_macros = shmat(shmid_macros, NULL, 0);
-    if (shared_macros == (void *)-1) {
-        perror("shmat failed for macros in worker");
-        raise(SIGTERM);
-    }
-
-    shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), 0);
-    if(shmid_daily_stats == -1){
-        perror("shmget in worker");
-        raise(SIGTERM);
-    }
-    shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
-    if (shared_daily_stats == (void *)-1) {
-        perror("shmat failed for stats in worker");
-        raise(SIGTERM);
-    }
-
-    shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), 0);
-    if(shmid_tot_stats == -1){
-        perror("shmget in worker");
-        raise(SIGTERM);
-    }
-    shared_tot_stats = shmat(shmid_tot_stats, NULL, 0);
-    if (shared_tot_stats == (void *)-1) {
-        perror("shmat failed for stats in worker");
-        raise(SIGTERM);
-    }
-
-    shmid_seats = shmget(shm_seats_key, shared_macros->NOF_WORKERSEATS * sizeof(worker_seat), 0);
-    if(shmid_seats == -1){
-        perror("shmget in worker");
-        raise(SIGTERM);
-    }
-    shared_seats = shmat(shmid_seats, NULL, 0);
-    if (shared_seats == (void *)-1) {
-        perror("shmat failed for seats in workerg");
-        raise(SIGTERM);
-    }
-
-    semid = semget(sem_key, shared_macros->NOF_WORKERSEATS + num_sem, 0);
-    if(semid == -1){
-        perror("semid");
-        raise(SIGTERM);
-    }
-
-    msgid = msgget(msg_key, 0);
-    if(msgid == -1){
-        perror("msgget");
-        raise(SIGTERM);
-    }
+    initialize_IPC(&msgid, &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
 
     srand(time(NULL) + getpid());
 
@@ -222,7 +155,7 @@ void office_time(struct message *msg, int msgid, int tasks[], int semid, int *re
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
         //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), (seat_num + shared_macros->NOF_WORKERSEATS) + 3, semid);
-        //printf("[user %d] ricevuto messaggio da worker %d\n", getpid(), msg->num);
+        //printf("[user %d] ricevuto messaggio da worker %d\n", getpid (), msg->num);
         signal_semaphore(semid, num_sem + seat_num);
 
         //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
