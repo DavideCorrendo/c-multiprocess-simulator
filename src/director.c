@@ -380,6 +380,7 @@ void print_stats(int day){
         int num3 = shared_tot_stats->num_task_done_per_task[i];
 
         printf("service %d\n", i);
+        printf("TOTAL TIME = %.2f\n", shared_daily_stats[day].time_task_daily_per_task[i]);
         printf("total number of services done per service: %d\n", shared_tot_stats->num_task_done_per_task[i]);
         printf("total number of user served per service: %d\n", shared_tot_stats->num_user_served_per_task[i]);
         printf("total number of services not done per service: %d\n", shared_tot_stats->num_task_not_done_per_task[i]);

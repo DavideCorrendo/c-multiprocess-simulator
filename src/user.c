@@ -160,8 +160,9 @@ void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int 
         signal_semaphore(semid, num_sem + seat_num);
 
         //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
+        if(msg->num > -1){//
         tasks_done[i] = true;
-        (*remaining_task)--;
+        (*remaining_task)--;}
     }
 
 }

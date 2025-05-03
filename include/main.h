@@ -45,8 +45,8 @@ typedef struct daily_stats{
     int user_served_per_task[6];//
     int task_done_per_task[6];//
     int task_not_done_per_task[6];//
-    int time_task_daily_per_task[6];//
-    int time_wait_daily_per_task[6];//
+    float time_task_daily_per_task[6];//
+    float time_wait_daily_per_task[6];//
 
     int num_pause_daily;
 
@@ -64,8 +64,8 @@ typedef struct tot_stats{
     int num_task_not_done;
 
     int num_worker_per_task[6];
-    int wait_time_per_task[6];//
-    int task_time_per_task[6];//
+    float wait_time_per_task[6];//
+    float task_time_per_task[6];//
 
     int num_user_served_per_task[6];
     int num_task_done_per_task[6];

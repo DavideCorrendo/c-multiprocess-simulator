@@ -2,7 +2,7 @@
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
 void working_time(int task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
-void update_stats(int day, int task, int task_time, bool pause, int wait_time);
+void update_stats(int day, int task, float task_time, bool pause, int wait_time);
 float ratio_worker_seats(int index, int num);
 
 static int ticket_msgid = -1;      
@@ -111,7 +111,8 @@ int main(int argc, char *argv[]) {
 void working_time(int task, int seat_num, struct message *msg, int msgid, int semid, int pause_counter, int day) {
 
     bool pause = false;
-    int user_served = 0, time_task_count = 0, wait_time = 0;
+    int user_served = 0, wait_time = 0;
+    float time_task_count = 0;
 
     while (get_semaphore_value(semid, 1) == 0 && !pause) {
         //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
@@ -124,9 +125,11 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
         usleep((time_task * N_NANO_SECS) / 1000);
 
         msg->mtype = 2;
+        msg->num = 1;//
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
+        //printf("TASK = %d ----- TIME = %.2f\n", task, time_task);
         time_task_count += time_task;
 
         if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {
@@ -164,7 +167,7 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
     return res;
 }
 
-void update_stats(int day, int task, int task_time, bool pause, int wait_time){
+void update_stats(int day, int task, float task_time, bool pause, int wait_time){
     
     shared_daily_stats[day].daily_waiting_time += wait_time;
     shared_daily_stats[day].time_wait_daily_per_task[task] += wait_time;
