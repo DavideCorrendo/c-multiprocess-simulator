@@ -1,4 +1,4 @@
-#include "main.h"
+#include "../include/main.h"
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
 void working_time(int task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     srand((time(NULL)) + getpid());
     int task = rand() % 6;
 
-    FILE *file = fopen("config_timeout.conf", "r");
+    FILE *file = fopen("conf/config_timeout.conf", "r");
     fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
     fclose(file);
 

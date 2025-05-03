@@ -1,4 +1,4 @@
-#include "main.h"
+#include "../include/main.h"
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/msg.h>
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < new_users; i++) {
         pid_t pid = fork();
         if (pid == 0) {
-            execl("./bin/user", "bin/user", NULL);
+            execl("./user", "./user", NULL);
             perror("execl failed");
             exit(EXIT_FAILURE);
         }

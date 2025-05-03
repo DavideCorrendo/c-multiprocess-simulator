@@ -1,4 +1,4 @@
-#include "main.h"
+#include "../include/main.h"
 
 static shared_data *shared_macros = NULL;
 static worker_seat *shared_seats = NULL;

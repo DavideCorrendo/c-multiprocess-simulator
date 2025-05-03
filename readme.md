@@ -7,7 +7,7 @@ The project, developed as part of the university course in Operating Systems (ac
 ```
 .
 ├── bin
-│   ├── add_user.c
+│   ├── add_user.o
 │   └── ...   
 ├── conf
 │   ├── explode.conf

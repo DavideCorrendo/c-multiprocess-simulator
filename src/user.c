@@ -1,4 +1,4 @@
-#include "main.h"
+#include "../include/main.h"
 
 static int ticket_msgid = -1;      
 static int *worker_msgids = NULL; 
@@ -50,7 +50,7 @@ int main() {
 
     //printf("[%d] user iniziato \n", getpid());
 
-    FILE *file = fopen("config_timeout.conf", "r");
+    FILE *file = fopen("conf/config_timeout.conf", "r");
     fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
     fclose(file);
 
