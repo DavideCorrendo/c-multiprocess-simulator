@@ -48,7 +48,6 @@ int main() {
         raise(SIGTERM);
     }
 
-    //printf("[%d] user iniziato \n", getpid());
 
     FILE *file = fopen("conf/config_timeout.conf", "r");
     fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
@@ -65,16 +64,8 @@ int main() {
     int size_r = sizeof(values) / sizeof(values[0]);
     int day;
 
-    //<-------------------------SEMAPHORE FOR THE TICKETS EROGATOR - USERS COMUNICATION GESTION-------------------------------->
-
-
         while(get_semaphore_value(semid, 3) == 0) {
 
-            //printf("%d iniziato \n", getpid());
-
-            //int P_SERV = rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1) + shared_macros->P_SERVE_MIN;//probabilty to go to the office
-            
-            //int decision = rand() % 101;
             int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
             int remaining_task = num_task;
             int *tasks = malloc(num_task * sizeof(int));
@@ -83,17 +74,9 @@ int main() {
                 tasks[i] = random_weighted(values, weights, size_r);
                 tasks_done[i] = false;
             }
-            //int time = rand() % 480;---------
-            //printf("[user: %d] qui\n", getpid());
-            wait_signal(semid, 0); 
-            //printf("[user: %d] qua\n", getpid());
-            //usleep((time * N_NANO_SECS) / 1000);--------------
             
-            //if(decision <= P_SERV){
-                /*printf("[user %d] num_task: %d\n", getpid(), num_task);
-                for(int i = 0; i < num_task; i++){
-                    printf("[user %d] tasks[%d]: %d\n", getpid(), i, tasks[i]);
-                }*/
+            wait_signal(semid, 0); 
+            
                 day = shared_macros->current_day; 
 
                 office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
@@ -105,11 +88,9 @@ int main() {
                 shared_macros->processes_finished++;
                 shared_macros->USER_FINISHED++;
                 signal_semaphore(semid, 5);
-            //}
 
             wait_signal(semid, 1);
 
-           
         }
     
     reset_signals_to_default();
@@ -125,41 +106,26 @@ void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int 
     for(int i = 0; i < num_task && get_semaphore_value(semid, 1) == 0; i++){
 
         msg->mtype = 1; 
-        /*printf("[user %d] taks[%d] = %d\n", getpid(), i, tasks[i]);
-
-        for(int j = 0; j < shared_macros[1]; j++){
-            printf("[user %d] %d OCCUPATO È %d\n", getpid(), j, shared_seats[j].busy);
-        }*/
 
         msg->num = tasks[i];
         wait_semaphore(semid, 2);
         msgsnd(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 0);
-        //printf("[user %d] mandato messaggio a t.e. : %d tipo: %ld\n", getpid(), msg->num, msg->mtype);
         msgrcv_wait(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
-        //printf("[user %d] ricevuto messaggio da t.e. : %d tempo: %.10f\n", getpid(), msg->num, msg->time);
         signal_semaphore(semid, 2);
         if(msg->num == -2){
-            //printf("[user %d] ricevuto -1 aspettando %d\n", getpid(), tasks[i]);
             continue;
         }
         
         seat_num = msg->num;
         msg->mtype = 1;
         msg->num = shared_macros->timer;
-        //printf("[user %d] inizio ad aspettare a temp %d\n", getpid(), shared_macros->timer);
-        //printf("[user %d] RICEVUTA SEDIA %d\n", getpid(), seat_num);
-        //puts("ASPETTO WAIT");
+
         wait_semaphore(semid, num_sem + seat_num);
-        //puts("FINITO ASPETTO");
-        //printf("[user %d] finito ad aspettare a temp %d\n", getpid(), shared_macros->timer);
         msg->num = shared_macros->timer - msg->num;
         msgsnd(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 0);
-        //printf("[user %d]messaggio mandato a %lu\n", getpid(), msg->mtype);
         msgrcv_wait(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 2, semid);
-        //printf("[user %d] ricevuto messaggio da worker %d\n", getpid (), msg->num);
         signal_semaphore(semid, num_sem + seat_num);
 
-        //printf("[user] ricevuto tipo %lu messaggio %s\n", msg->mtype, msg->mtext);
         if(msg->num > -1){//
         tasks_done[i] = true;
         (*remaining_task)--;}

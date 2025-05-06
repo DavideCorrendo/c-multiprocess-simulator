@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < new_users; i++) {
         pid_t pid = fork();
         if (pid == 0) {
-            execl("./user", "./user", NULL);
+            execl("bin/user", "bin/user", NULL);
             perror("execl failed");
             exit(EXIT_FAILURE);
         }

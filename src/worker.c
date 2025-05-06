@@ -35,8 +35,6 @@ int main(int argc, char *argv[]) {
         raise(SIGTERM);
     }
 
-    //printf("[%d] worker iniziato \n", getpid()); 
-
     struct message msg;
     int id_worker = atoi(argv[1]);
 
@@ -74,14 +72,11 @@ int main(int argc, char *argv[]) {
         seat_num = -1;
 
         while (!find_seat(task, id_worker, semid, &seat_num) && end == false) {
-            //printf("[worker %d] qui\n", getpid());
             end = get_semaphore_value(semid, 1);
-            //printf("[worker %d] qua\n", getpid());
             if(end){break;}
-            //usleep((N_NANO_SEC * 10) / 1000);
             sleep(1);
         }
-        //printf("[worker %d] findseat finita end = %d\n", getpid(), end);
+        
         if(end == false)working_time(task, seat_num, &msg, worker_msgids[seat_num], semid, pause_counter, day);
 
         wait_semaphore(semid, 5);
@@ -96,7 +91,6 @@ int main(int argc, char *argv[]) {
         }
 
         wait_signal(semid, 1);
-        //printf("[worker %d] worker finito\n", getpid());
         
         msg.num = -1;
         seat_num = -1;
@@ -115,10 +109,8 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
     float time_task_count = 0;
 
     while (get_semaphore_value(semid, 1) == 0 && !pause) {
-        //printf("[worker %d] seat_num = %d con task = %d\n", getpid(), seat_num, task);
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);
         if(msg->num == -1)break;
-        //printf("[worker %d] ricevuto messaggio\n", getpid());
         wait_time += msg->num;
         float time_task = msg->time;
         
@@ -129,7 +121,6 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
-        //printf("TASK = %d ----- TIME = %.2f\n", task, time_task);
         time_task_count += time_task;
 
         if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {
@@ -143,9 +134,7 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
 
     }
 
-    //usleep(500);
     wait_semaphore(semid, 4);
-    //printf("STATS: %d, %d\n", time_task_count, wait_time);
     update_stats(day, task, time_task_count, pause, wait_time);
     signal_semaphore(semid, 4);
 }
@@ -153,9 +142,7 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
 bool find_seat(int task, int id_worker, int semid, int *seat_num) {
     bool res = false;
     for (int i = 0; i < shared_macros->NOF_WORKERSEATS && !res; i++) {
-        //printf("[worker %d] credo qui\n", getpid());
         wait_semaphore(semid, i + num_sem);
-        //printf("[worker %d] credo qua\n", getpid());
         if (shared_seats[i].task == task && !shared_seats[i].busy) {
             shared_seats[i].busy = true;
             *seat_num = i;

@@ -89,12 +89,9 @@ void handle_child_exit(int sig) {
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {
-            printf("Process %d terminated with signal %d status %d\n", 
-                   pid, sig, WEXITSTATUS(status));
+            printf("Process %d terminated with signal %d status %d\n", pid, sig, WEXITSTATUS(status));
         } else if (WIFSIGNALED(status)) {
-            printf("Process %d killed by signal %d%s\n", 
-                   pid, WTERMSIG(status),
-                   WCOREDUMP(status) ? " (core dumped)" : "");
+            printf("Process %d killed by signal %d%s\n", pid, WTERMSIG(status), WCOREDUMP(status) ? " (core dumped)" : "");
         }
     }
     
@@ -119,14 +116,11 @@ void handle_termination(int sig) {
 
 
 int main() {
+    puts("director process started");
     setup_signal_handlers();  
-    
-    printf("[%d] director iniziato \n", getpid());
 
-    const char *file_explode = "conf/config_explode.conf";
-    if(file_explode == NULL)printf("errore nell'apertura del file di explode");
-
-    EXPLODE_THRESHOLD = leggi_parametro(file_explode, "EXPLODE_THRESHOLD");
+    //extract explode thresholde from the file
+    EXPLODE_THRESHOLD = leggi_parametro("conf/config_explode.conf", "EXPLODE_THRESHOLD");
 
     int NOF_WORKERS;
     int NOF_WORKERSEATS;
@@ -136,10 +130,9 @@ int main() {
     int P_SERVE_MIN;
     int P_SERVE_MAX;
 
+    puts("extract and initialization all variables for the simulation...");
     load_config("conf/config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST,
     &P_SERVE_MIN, &P_SERVE_MAX);
-
-    puts("program started");
 
     initialization_shm(SIM_DURATION, NOF_WORKERSEATS);
 
@@ -174,8 +167,7 @@ int main() {
 
     initialize_semaphore(semid);
 
-    puts("initializzazion finished");
-
+    puts("forking child porcesses...");
     pid_t pid = fork();
     if (pid == 0) {
         execv("bin/ticket_erogator", (char*[]){ "bin/ticket_erogator", NULL });
@@ -213,14 +205,15 @@ int main() {
         raise(SIGTERM);
     }
 
-
+    puts("simulaiton started");
     for(; shared_macros->current_day < SIM_DURATION; shared_macros->current_day++){
-        tasks_assignment(); 
-        puts("task_assignment fatto");
+        puts("workerseats tasks assignment...");
+        tasks_assignment();
         signal_semaphore(semid, 0);
+        puts("day started");
         simulate_day();
-        printf("NOF_USER_NOT_FINISHED = %d \n", shared_macros->NOF_USERS - shared_macros->USER_FINISHED);
-        if((shared_macros->NOF_USERS - shared_macros->USER_FINISHED) >= EXPLODE_THRESHOLD){
+        puts("day finished");
+        if((shared_macros->NOF_USERS - shared_macros->USER_FINISHED) >= EXPLODE_THRESHOLD){//if number of user processes still waiting is bigger then EXPLODE_THRESHOLD program shots down
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
@@ -231,18 +224,16 @@ int main() {
         wait_semaphore(semid, 1);
         puts("wait_process finito");
         print_stats(shared_macros->current_day);
-        reset_ipc();   
-        puts("reset fatto");     
+        reset_ipc();  
+        puts("reset done");     
     }
-
-    puts("FINITO TUTTO");
 
     //print_file_stats();
 
     reset_signals_to_default();
-    puts("resettato");
     sleep(2);
     cleanup();
+    puts("all ipc resources cleaned up");
 
     printf("Simulation completed successfully\n");
     return EXIT_SUCCESS;
@@ -525,10 +516,90 @@ void print_file_stats() {
 }
 
 void tasks_assignment() {
-    for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
-        wait_semaphore(semid, 5 + i);
-        shared_seats[i].task = i % 6;
-        signal_semaphore(semid, 5 + i);
+    // If it's the first day, use the default assignment
+    if (shared_macros->current_day == 0) {
+        for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            wait_semaphore(semid, 5 + i);
+            shared_seats[i].task = i % 6;
+            signal_semaphore(semid, 5 + i);
+        }
+        return;
+    }
+    
+    // Get statistics from the previous day
+    int prev_day = shared_macros->current_day - 1;
+    int task_demand[6] = {0};
+    
+    // Calculate demand for each task (completed + not completed)
+    for (int i = 0; i < 6; i++) {
+        task_demand[i] = shared_daily_stats[prev_day].task_done_per_task[i] + 
+                         shared_daily_stats[prev_day].task_not_done_per_task[i];
+    }
+    
+    // Calculate how many seats to allocate for each task
+    int seats_per_task[6] = {0};
+    int total_demand = 0;
+    
+    for (int i = 0; i < 6; i++) {
+        total_demand += task_demand[i];
+    }
+    
+    // Default distribution if no demand
+    if (total_demand == 0) {
+        for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            wait_semaphore(semid, 5 + i);
+            shared_seats[i].task = i % 6;
+            signal_semaphore(semid, 5 + i);
+        }
+        return;
+    }
+    
+    // Distribute seats proportionally to demand
+    int seats_allocated = 0;
+    for (int i = 0; i < 6; i++) {
+        // Calculate proportion of seats based on demand
+        seats_per_task[i] = (task_demand[i] * shared_macros->NOF_WORKERSEATS) / total_demand;
+        seats_allocated += seats_per_task[i];
+    }
+    
+    // Allocate any remaining seats (due to integer division)
+    while (seats_allocated < shared_macros->NOF_WORKERSEATS) {
+        // Find task with highest demand per allocated seat
+        float max_demand_ratio = -1;
+        int max_task = 0;
+        
+        for (int i = 0; i < 6; i++) {
+            float ratio = (seats_per_task[i] > 0) ? 
+                      (float)task_demand[i] / seats_per_task[i] : 
+                      (float)task_demand[i];
+                      
+            if (ratio > max_demand_ratio) {
+                max_demand_ratio = ratio;
+                max_task = i;
+            }
+        }
+        
+        seats_per_task[max_task]++;
+        seats_allocated++;
+    }
+    
+    // Group same tasks together for efficient searching
+    int seat_index = 0;
+    for (int task_type = 0; task_type < 6; task_type++) {
+        for (int j = 0; j < seats_per_task[task_type]; j++) {
+            if (seat_index < shared_macros->NOF_WORKERSEATS) {
+                wait_semaphore(semid, 5 + seat_index);
+                shared_seats[seat_index].task = task_type;
+                signal_semaphore(semid, 5 + seat_index);
+                seat_index++;
+            }
+        }
+    }
+    
+    // Log the distribution
+    printf("Task distribution for day %d:\n", shared_macros->current_day);
+    for (int i = 0; i < 6; i++) {
+        printf("Task %d: %d seats (demand: %d)\n", i, seats_per_task[i], task_demand[i]);
     }
 }
 
@@ -631,19 +702,11 @@ if (child_pids != NULL) {
 }
 
 void wait_processes(){
-
-    printf("NUM_WORKER = %d   NUM_USER = %d\n", shared_macros->NOF_WORKERS, shared_macros->NOF_USERS);
-
-    // Get message queue statistics
-    //struct msqid_ds queue_info;
-    
-
     while(1) {
         if(shared_macros->processes_finished == shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1) break;
-        printf("%d\n",shared_macros->processes_finished);
+        printf("waiting %d processes to end day\n",(shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1) - shared_macros->processes_finished);
         sleep(1);
     }
-
 }
 
 void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE,
@@ -657,19 +720,18 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
 
     char line[256];
     while (fgets(line, sizeof(line), file)) {
-        // Ignora righe vuote e commenti
+        // ignore void lines and comments
         if (line[0] == '#' || line[0] == '\n') continue;
         
-        // Rimuovi spazi e newline
+        // remove spaces and newlines
         line[strcspn(line, "\n")] = 0;
         
-        // Dividi chiave e valore
         char *key = strtok(line, " =");
         char *value = strtok(NULL, " =");
         
-        if (!key || !value) continue;  // Formato non valido
+        if (!key || !value) continue; 
 
-        // Assegnazione valori
+        // value assigning
         if (strcmp(key, "SIM_DURATION") == 0) {
             SIM_DURATION = atoi(value);
         } 
@@ -701,11 +763,22 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
     
     fclose(file);
     
-    // Verifica valori minimi (esempio)
-    if (SIM_DURATION <= 0) {
-        fprintf(stderr, "SIM_DURATION deve essere > 0\n");
+    // check for errors
+    if (SIM_DURATION <= 0 || *NOF_WORKERS <= 0 || *NOF_WORKERSEATS <= 0 || *NOF_USERS <= 0) {
+        fprintf(stderr, "SIM DURATION, NOF_WORKER, NOF_WORKERSEATS and NOF_USERS must be > 0\n");
         exit(EXIT_FAILURE);
     }
+
+    if (*NOF_PAUSE < 0 || *P_SERVE_MIN < 0 || *P_SERVE_MAX < 0) {
+        fprintf(stderr, "NOF_PAUSE, P_SERVE_MIN and P_SERVE_MAX must be >= 0\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (*P_SERVE_MIN > 100 || *P_SERVE_MAX > 100) {
+        fprintf(stderr, "P_SERVE_MIN and P_SERVE_MAX must be <= 100\n");
+        exit(EXIT_FAILURE);
+    }
+
 }
 
 void initialize_semaphore(int semid){
