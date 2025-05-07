@@ -554,24 +554,43 @@ void tasks_assignment() {
         return;
     }
     
-    // Distribute seats proportionally to demand
-    int seats_allocated = 0;
+    // First, ensure at least one seat for each task type
+    int remaining_seats = shared_macros->NOF_WORKERSEATS - 6;
+    
+    // Initialize with one seat per task
     for (int i = 0; i < 6; i++) {
-        // Calculate proportion of seats based on demand
-        seats_per_task[i] = (task_demand[i] * shared_macros->NOF_WORKERSEATS) / total_demand;
-        seats_allocated += seats_per_task[i];
+        seats_per_task[i] = 1;
+    }
+    
+    // If not enough seats for one per task type, distribute evenly
+    if (remaining_seats < 0) {
+        // Not enough seats, just distribute evenly (cycle through tasks)
+        for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++) {
+            wait_semaphore(semid, 5 + i);
+            shared_seats[i].task = i % 6;
+            signal_semaphore(semid, 5 + i);
+        }
+        return;
+    }
+    
+    // Distribute remaining seats proportionally to demand
+    if (remaining_seats > 0) {
+        for (int i = 0; i < 6; i++) {
+            // Calculate additional seats based on demand proportion
+            int additional_seats = (task_demand[i] * remaining_seats) / total_demand;
+            seats_per_task[i] += additional_seats;
+            remaining_seats -= additional_seats;
+        }
     }
     
     // Allocate any remaining seats (due to integer division)
-    while (seats_allocated < shared_macros->NOF_WORKERSEATS) {
+    while (remaining_seats > 0) {
         // Find task with highest demand per allocated seat
         float max_demand_ratio = -1;
         int max_task = 0;
         
         for (int i = 0; i < 6; i++) {
-            float ratio = (seats_per_task[i] > 0) ? 
-                      (float)task_demand[i] / seats_per_task[i] : 
-                      (float)task_demand[i];
+            float ratio = (float)task_demand[i] / seats_per_task[i];
                       
             if (ratio > max_demand_ratio) {
                 max_demand_ratio = ratio;
@@ -580,7 +599,7 @@ void tasks_assignment() {
         }
         
         seats_per_task[max_task]++;
-        seats_allocated++;
+        remaining_seats--;
     }
     
     // Group same tasks together for efficient searching
