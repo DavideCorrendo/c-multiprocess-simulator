@@ -228,7 +228,7 @@ int main() {
         puts("reset done");     
     }
 
-    //print_file_stats();
+    print_file_stats();
 
     reset_signals_to_default();
     sleep(2);

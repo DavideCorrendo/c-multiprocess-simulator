@@ -63,6 +63,8 @@ int main() {
     int weights[] = {50, 20, 15, 10, 4, 1};
     int size_r = sizeof(values) / sizeof(values[0]);
     int day;
+    int probability = (rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1)) + shared_macros->P_SERVE_MIN;
+
 
         while(get_semaphore_value(semid, 3) == 0) {
 
@@ -74,15 +76,24 @@ int main() {
                 tasks[i] = random_weighted(values, weights, size_r);
                 tasks_done[i] = false;
             }
+
+            int rand_decision = rand() % 100;
             
             wait_signal(semid, 0); 
-            
+
                 day = shared_macros->current_day; 
 
-                office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
-                wait_semaphore(semid, 4);
-                update_stats(num_task, remaining_task, day, tasks, tasks_done);
-                signal_semaphore(semid, 4);
+                if (rand_decision < probability) {
+                    // Generate a random delay (0 to 720 timer units, each unit is 10ms)
+                    int delay_units = rand() % 720;
+                    usleep((delay_units * N_NANO_SECS) / 1000); // Convert to microseconds
+                    office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
+                
+                    wait_semaphore(semid, 4);
+                    update_stats(num_task, remaining_task, day, tasks, tasks_done);
+                    signal_semaphore(semid, 4);
+                
+                }
 
                 wait_semaphore(semid, 5);
                 shared_macros->processes_finished++;
