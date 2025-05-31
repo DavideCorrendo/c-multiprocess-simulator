@@ -85,7 +85,7 @@ void setup_signal_handlers() {
 void handle_child_exit(int sig) {
     int status;
     pid_t pid;
-    int saved_errno = errno;  // Save errno
+    int saved_errno = errno;  
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {

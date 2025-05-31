@@ -22,6 +22,8 @@ The project, developed as part of the university course in Operating Systems (ac
 │    ├── user.c
 │    └── worker.c
 ├── makefile
+├── monitor_my_program.sh
+├── program_resources.log
 ├── readme.md
 └── stats.csv
 
