@@ -31,6 +31,8 @@ void signal_handler(int sig) {
 }
 
 int main() {
+
+    //initialize signal mask
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
@@ -59,19 +61,26 @@ int main() {
 
     srand(time(NULL) + getpid());
 
+    //initialized variables for random_weighted
     int values[] = {0, 1, 2, 3, 4, 5};
     int weights[] = {50, 20, 15, 10, 4, 1};
     int size_r = sizeof(values) / sizeof(values[0]);
+
     int day;
-    int probability = (rand() % (shared_macros->P_SERVE_MAX - shared_macros->P_SERVE_MIN + 1)) + shared_macros->P_SERVE_MIN;
+    wait_semaphore(semid, macros);
+    int probability = (rand() % (shared_macros->P_SERV_MAX - shared_macros->P_SERV_MIN + 1)) + shared_macros->P_SERV_MIN;// probability to go to the post office
+    signal_semaphore(semid, macros); 
 
+        while(get_semaphore_value(semid, end_simulation) == 0) {
 
-        while(get_semaphore_value(semid, 3) == 0) {
-
+            wait_semaphore(semid, macros); 
             int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
+            signal_semaphore(semid, macros); 
+
             int remaining_task = num_task;
             int *tasks = malloc(num_task * sizeof(int));
             bool *tasks_done = malloc(num_task * sizeof(bool));
+
             for(int i = 0; i < num_task; i++){
                 tasks[i] = random_weighted(values, weights, size_r);
                 tasks_done[i] = false;
@@ -79,29 +88,28 @@ int main() {
 
             int rand_decision = rand() % 100;
             
-            wait_signal(semid, 0); 
+            wait_signal(semid, start_day); //wait until director declares start of the day
 
-                day = shared_macros->current_day; 
+            wait_semaphore(semid, macros);
+            day = shared_macros->current_day;
+            signal_semaphore(semid, macros); 
 
-                if (rand_decision < probability) {
-                    // Generate a random delay (0 to 720 timer units, each unit is 10ms)
-                    int delay_units = rand() % 720;
-                    usleep((delay_units * N_NANO_SECS) / 1000); // Convert to microseconds
-                    office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
-                
-                    wait_semaphore(semid, 4);
-                    update_stats(num_task, remaining_task, day, tasks, tasks_done);
-                    signal_semaphore(semid, 4);
-                
-                }
+            if (rand_decision < probability){
+                int delay_units = rand() % 720;// Generate a random delay to decide when the user must go to the post office
+                usleep((delay_units * N_NANO_SECS) / 1000); // Convert to nanoseconds
+                office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
+            
+                wait_semaphore(semid, stats);
+                update_stats(num_task, remaining_task, day, tasks, tasks_done);
+                signal_semaphore(semid, stats);
+            }
 
-                wait_semaphore(semid, 5);
-                shared_macros->processes_finished++;
-                shared_macros->USER_FINISHED++;
-                signal_semaphore(semid, 5);
+            wait_semaphore(semid, macros);
+            shared_macros->processes_finished++;
+            shared_macros->USER_FINISHED++;
+            signal_semaphore(semid, macros);
 
-            wait_signal(semid, 1);
-
+            wait_signal(semid, end_day);//wait until director declares end of the day
         }
     
     reset_signals_to_default();
@@ -131,11 +139,11 @@ void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int 
         msg->mtype = 1;
         msg->num = shared_macros->timer;
 
-        wait_semaphore(semid, num_sem + seat_num);
+        wait_semaphore(semid, worker_seats + seat_num);
         msg->num = shared_macros->timer - msg->num;
         msgsnd(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 0);
         msgrcv_wait(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 2, semid);
-        signal_semaphore(semid, num_sem + seat_num);
+        signal_semaphore(semid, worker_seats + seat_num);
 
         if(msg->num > -1){//
         tasks_done[i] = true;
@@ -155,7 +163,7 @@ void cleanup_resources() {
     }
 }
 
-int random_weighted(int values[], int weights[], int size) {
+int random_weighted(int values[], int weights[], int size) {//function that extract randomly an element in values[] based on chances on weights[]
 
     int total_weight = 0;
     for (int i = 0; i < size; i++) {
@@ -178,7 +186,6 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
 
     if(remaining_task < num_task){
         shared_daily_stats[day].user_served_daily++;
-
         shared_tot_stats->num_user_served++;
     }
 
@@ -188,14 +195,14 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     shared_tot_stats->num_task_done += (num_task - remaining_task);
     shared_tot_stats->num_task_not_done += remaining_task;
 
-    for(int i = 0; i < num_task; i++){
-        if(tasks_done[i]){
+    for(int i = 0; i < num_task; i++){//cicle for every task the user asked
+        if(tasks_done[i]){// if task has been done 
             shared_daily_stats[day].user_served_per_task[tasks[i]]++;
             shared_daily_stats[day].task_done_per_task[tasks[i]]++;
 
             if(!exist(i, tasks_done, tasks))shared_tot_stats->num_user_served_per_task[tasks[i]]++;
             shared_tot_stats->num_task_done_per_task[tasks[i]]++;
-        }else{
+        }else{// otherwise
             shared_daily_stats[day].task_not_done_per_task[tasks[i]]++;
             shared_tot_stats->num_task_not_done_per_task[tasks[i]]++;
         }
@@ -203,7 +210,7 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
 
 }
 
-bool exist(int i , bool tasks_done[], int tasks[]){
+bool exist(int i , bool tasks_done[], int tasks[]){//control if user asked for two or more of the same task, if the result is true, it doesn't modify the num_user_served_per_task stat 
     bool res = false;
     for(int j = 0; j < i && !res; j++){
         if(tasks[i] == tasks[j]){

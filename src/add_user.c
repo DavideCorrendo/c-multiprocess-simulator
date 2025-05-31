@@ -1,8 +1,4 @@
 #include "../include/main.h"
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/msg.h>
-#include <sys/sem.h>
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -16,29 +12,30 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Ottieni le chiavi IPC esistenti
-    key_t shm_data_key = ftok("/tmp", 'D'); //<----------------------da sistemare-------------------->
-    
-    // Attacca alla memoria condivisa
-    int shmid_data = shmget(shm_data_key, sizeof(struct shared_data), 0666);//<------------da controllare perchè sostituito a NUM_MACROS------>
+    key_t shm_data_key = ftok("/tmp", 'D');
+    key_t sem_key = ftok("/tmp", 'E');
+
+    // Attach shared memory
+    int shmid_data = shmget(shm_data_key, sizeof(struct shared_data), 0666);
     shared_data *shared_data = shmat(shmid_data, NULL, 0);
+
+    int semid = semid = semget(sem_key, shared_data->NOF_WORKERSEATS + worker_seats, 0);
+    if(semid == -1){
+        perror("semid");
+        raise(SIGTERM);
+    }
     
-    shared_data->NOF_USERS += new_users; 
+    wait_semaphore(semid, macros);
+    shared_data->NOF_USERS += new_users;
+    signal_semaphore(semid, macros); 
     
-    
-    // Crea nuovi processi utente
+    // Create [new_users] new users
     for (int i = 0; i < new_users; i++) {
         pid_t pid = fork();
-        if (pid == 0) {
+        if (pid == 0){
             execl("bin/user", "bin/user", NULL);
             perror("execl failed");
             exit(EXIT_FAILURE);
-        }
-        else if (pid > 0) {
-            // Aggiorna contatore processi in modo sicuro
-
-            //shared_data->processes_finished++; // Processi attesi
-
         }
     }
     

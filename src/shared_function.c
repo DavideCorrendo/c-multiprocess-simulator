@@ -2,35 +2,6 @@
 
 union semun arg;
 
-
-// Reads a parameter from the specified file
-int leggi_parametro(const char *file_path, const char *parametro) {
-    FILE *file = fopen(file_path, "r");
-    if (file == NULL) {
-        perror("Errore nell'apertura del file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[30];
-    while (fgets(line, sizeof(line), file)) {
-        // Remove newline character if present
-        line[strcspn(line, "\n")] = 0;
-
-        // Look for the specified key
-        char *key = strtok(line, "=");
-        char *value = strtok(NULL, "=");
-
-        if (key && value && strcmp(key, parametro) == 0) {
-            fclose(file);
-            return atoi(value);
-        }
-    }
-
-    fclose(file);
-    fprintf(stderr, "Parameter '%s' not found in %s\n", parametro, file_path);
-    exit(EXIT_FAILURE);
-}
-
 int semop_retry(int semid, struct sembuf *sops, size_t nsops) {
     int ret;
     do {
@@ -159,7 +130,7 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
         raise(SIGTERM);
     }
 
-    *semid = semget(sem_key, (*shared_macros)->NOF_WORKERSEATS + num_sem, 0);
+    *semid = semget(sem_key, (*shared_macros)->NOF_WORKERSEATS + worker_seats, 0);
     if(*semid == -1){
         perror("semid");
         raise(SIGTERM);
@@ -202,7 +173,7 @@ void reset_signals_to_default() {
 
 void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int semid){
     msg->num = -1;
-    while(get_semaphore_value(semid,1) == 0 && msg->num == -1){
+    while(get_semaphore_value(semid, end_day) == 0 && msg->num == -1){
         msgrcv(msgid, msg, size, type, IPC_NOWAIT);
         usleep(500);
     }

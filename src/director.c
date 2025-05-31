@@ -13,6 +13,7 @@ void print_file_stats();
 void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE,
 int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX);
 void initialize_semaphore(int semid);
+int leggi_parametro(const char *file_path, const char *parametro);
 FILE *fp;
 
 
@@ -85,7 +86,7 @@ void setup_signal_handlers() {
 void handle_child_exit(int sig) {
     int status;
     pid_t pid;
-    int saved_errno = errno;  
+    int saved_errno = errno;  // Save errno
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         if (WIFEXITED(status)) {
@@ -130,10 +131,8 @@ int main() {
     int P_SERVE_MIN;
     int P_SERVE_MAX;
 
-    puts("extract and initialization all variables for the simulation...");
-    load_config("conf/config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST,
-    &P_SERVE_MIN, &P_SERVE_MAX);
-
+    puts("extracting and initializating of all variables for the simulation...");
+    load_config("conf/config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST, &P_SERVE_MIN, &P_SERVE_MAX);
     initialization_shm(SIM_DURATION, NOF_WORKERSEATS);
 
     shared_macros->NOF_WORKERS = NOF_WORKERS;
@@ -143,8 +142,8 @@ int main() {
     shared_macros->timer = 0;
     shared_macros->N_REQUESTS = N_REQUEST;
     shared_macros->NOF_USERS = NOF_USERS;
-    shared_macros->P_SERVE_MIN = P_SERVE_MIN;
-    shared_macros->P_SERVE_MAX = P_SERVE_MAX;
+    shared_macros->P_SERV_MIN = P_SERVE_MIN;
+    shared_macros->P_SERV_MAX = P_SERVE_MAX;
     shared_macros->USER_FINISHED = 0;
     shared_macros->SIM_DURATION = SIM_DURATION;
 
@@ -199,12 +198,6 @@ int main() {
         add_child_pid(pid);
     }
 
-    fp = fopen("stats.csv", "a");
-    if (fp == NULL) {
-        perror("Error opening stats.csv");
-        raise(SIGTERM);
-    }
-
     puts("simulaiton started");
     for(; shared_macros->current_day < SIM_DURATION; shared_macros->current_day++){
         puts("workerseats tasks assignment...");
@@ -222,13 +215,25 @@ int main() {
         signal_semaphore(semid, 1);
         wait_processes();
         wait_semaphore(semid, 1);
-        puts("wait_process finito");
+        puts("wait_process finished");
         print_stats(shared_macros->current_day);
         reset_ipc();  
         puts("reset done");     
     }
 
+    puts("simulation completed. printing stats in file...");
+
+    fp = fopen("stats.csv", "a");
+    if (fp == NULL) {
+        perror("Error opening stats.csv");
+        raise(SIGTERM);
+    }
+
     print_file_stats();
+
+    fclose(fp);
+
+    puts("stats printed correctly. resetting signal and cleaning IPC resources...");
 
     reset_signals_to_default();
     sleep(2);
@@ -323,7 +328,7 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
         }
     }
 
-    semid = semget(sem_key, NOF_WORKERSEATS + num_sem, IPC_CREAT | 0666);
+    semid = semget(sem_key, NOF_WORKERSEATS + worker_seats, IPC_CREAT | 0666);
     if(semid == -1) {
         perror("semget");
         exit(1);
@@ -714,10 +719,6 @@ if (child_pids != NULL) {
 
     // Remove semaphore
     semctl(semid, 0, IPC_RMID);
-
-    if (fp != NULL) {
-        fclose(fp);
-    }
 }
 
 void wait_processes(){
@@ -728,8 +729,7 @@ void wait_processes(){
     }
 }
 
-void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE,
-    int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX) {
+void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE, int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX) {
 
     FILE *file = fopen(filename, "r");
     if (!file) {
@@ -808,6 +808,34 @@ void initialize_semaphore(int semid){
     init_semaphore(semid,4,1);
     init_semaphore(semid,5,1);
     for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
-        init_semaphore(semid, num_sem + i, 1);
+        init_semaphore(semid, worker_seats + i, 1);
     }
+}
+
+// Reads a parameter from the specified file
+int leggi_parametro(const char *file_path, const char *parametro) {
+    FILE *file = fopen(file_path, "r");
+    if (file == NULL) {
+        perror("Errore nell'apertura del file");
+        exit(EXIT_FAILURE);
+    }
+
+    char line[30];
+    while (fgets(line, sizeof(line), file)) {
+        // Remove newline character if present
+        line[strcspn(line, "\n")] = 0;
+
+        // extract the value after the = 
+        char *key = strtok(line, "=");
+        char *value = strtok(NULL, "=");
+
+        if (key && value && strcmp(key, parametro) == 0) {
+            fclose(file);
+            return atoi(value);
+        }
+    }
+
+    fclose(file);
+    fprintf(stderr, "Parameter '%s' not found in %s\n", parametro, file_path);
+    exit(EXIT_FAILURE);
 }

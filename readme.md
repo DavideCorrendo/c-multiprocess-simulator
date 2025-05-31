@@ -1,3 +1,6 @@
+- Correndo Davide   davide.correndo@edu.unito.it    1104824
+- Collura Federico  federico.collura@edu.unito.it   1102786
+
 # Project 2024-2025 OPERATING SYSTEMS
 
 ## Project Structure

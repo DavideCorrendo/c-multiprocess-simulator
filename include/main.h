@@ -5,7 +5,6 @@
 
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 #define N_NANO_SECS 10000000 //MUST BE A MULTIPLE OF 1000
-#define num_sem 6
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +25,16 @@
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC 1 
 #endif
+
+enum sem{
+    start_day,
+    end_day,
+    ticket_erogator,
+    end_simulation,
+    stats,
+    macros,
+    worker_seats
+};
 
 typedef struct worker_seat{
     int id;
@@ -86,8 +95,8 @@ typedef struct shared_data{
     int NOF_USERS;
     int current_day;
     int processes_finished;
-    int P_SERVE_MIN;
-    int P_SERVE_MAX;
+    int P_SERV_MIN;
+    int P_SERV_MAX;
     int USER_FINISHED;
     int SIM_DURATION;
 }shared_data;
