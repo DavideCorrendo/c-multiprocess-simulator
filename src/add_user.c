@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
     int shmid_data = shmget(shm_data_key, sizeof(struct shared_data), 0666);
     shared_data *shared_data = shmat(shmid_data, NULL, 0);
 
-    int semid = semid = semget(sem_key, shared_data->NOF_WORKERSEATS + worker_seats, 0);
+    int semid = semget(sem_key, shared_data->NOF_WORKERSEATS + worker_seats, 0);
     if(semid == -1){
         perror("semid");
         raise(SIGTERM);
@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
         if (pid == 0){
             execl("bin/user", "bin/user", NULL);
             perror("execl failed");
+            shmdt(shared_data);
             exit(EXIT_FAILURE);
         }
     }

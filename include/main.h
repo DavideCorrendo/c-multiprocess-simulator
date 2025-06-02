@@ -60,6 +60,7 @@ typedef struct daily_stats{
     int num_pause_daily;
 
     int num_workers_active_daily;
+    float num_ratio_worker_user[6];
 
 }daily_stats;
 
@@ -83,7 +84,6 @@ typedef struct tot_stats{
     int num_worker_active;
     int num_pause;
 
-    double num_ratio_worker_user[100];//VA MESSO IN DAILY---------------------------------------
 }tot_stats;
 
 typedef struct shared_data{

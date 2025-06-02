@@ -56,6 +56,26 @@ The project, developed as part of the university course in Operating Systems (ac
 
 - **`makefile`**: Script to automate the project's compilation.
 
+# IPC Resources 
+
+## Shared Memory
+- daily_stats: contains statistics for every day
+- tot_stats: contains statistics of all the simulation from day o to SIM_DURATION
+- worker_seats: contains all the data needed to manage the workers's seats (id, task, busy(boolean), worker_id)
+
+## Semaphores     
+- start day           (initialized 0)
+- end day             (initialized 0)
+- ticket erogator     (initialized 1)
+- end simulation      (initialized 0)
+- stats               (initialized 1)
+- macros              (initialized 1)
+- worker seats        (initialized 1) [as many as the number of the worker seats]
+
+## Message queues
+- ticket erogator <---> users ---> type 1 for ticket erogator and type 2 for users
+- workers <---> users ---> type 1 for worker and type 2 for users [id_worker]   [as many as the number of the worker seats]
+
 ## Project Objective
 
 The objective of the project is to simulate a post office where multiple processes interact to manage users, services, and resources. The simulation includes:

@@ -3,7 +3,7 @@
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
 void working_time(int task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
 void update_stats(int day, int task, float task_time, bool pause, int wait_time);
-float ratio_worker_seats(int index, int num);
+float ratio_worker_seats(int task);
 
 static int ticket_msgid = -1;      
 static int *worker_msgids = NULL; 
@@ -56,12 +56,12 @@ int main(int argc, char *argv[]) {
     bool day_ended = false;
     int seat_num;
 
-    wait_semaphore(semid, 4);
+    wait_semaphore(semid, stats);
     shared_tot_stats->num_worker_per_task[task]++;
-    signal_semaphore(semid, 4);
+    signal_semaphore(semid, stats);
 
 
-    while(get_semaphore_value(semid, 3) == 0){
+    while(get_semaphore_value(semid, end_simulation) == 0){
 
         wait_signal(semid, start_day);//wait until director declares start of the day
         day_ended = false;
@@ -105,7 +105,7 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
     int user_served = 0, wait_time = 0;
     float time_task_count = 0;
 
-    while (get_semaphore_value(semid, 1) == 0 && !pause) {
+    while (get_semaphore_value(semid, end_day) == 0 && !pause) {
         msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);//wait until a user send a message or day finish
         if(msg->num == -1)break;//if day finished
         wait_time += msg->num;
@@ -123,17 +123,17 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
         if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {//1% chance of doing pause after task done 
             pause_counter++;
             pause = true;
-            wait_semaphore(semid, 6);
+            wait_semaphore(semid, worker_seats + seat_num);
             shared_seats[seat_num].busy = false;
             shared_seats[seat_num].worker_id = -1;
-            signal_semaphore(semid, 6);
+            signal_semaphore(semid, worker_seats + seat_num);
         }
 
     }
 
-    wait_semaphore(semid, 4);
+    wait_semaphore(semid, stats);
     update_stats(day, task, time_task_count, pause, wait_time);
-    signal_semaphore(semid, 4);
+    signal_semaphore(semid, stats);
 }
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num) {
@@ -176,14 +176,11 @@ void update_stats(int day, int task, float task_time, bool pause, int wait_time)
     shared_daily_stats[day].num_workers_active_daily++;
     shared_tot_stats->num_worker_active++;
 
-    for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
-        int current_task = shared_seats[i].task;
-        int workers_for_task = shared_tot_stats->num_worker_per_task[current_task];
-        shared_tot_stats->num_ratio_worker_user[i] = ratio_worker_seats(current_task, workers_for_task);
-    }
+    shared_daily_stats[day].num_ratio_worker_user[task] = ratio_worker_seats(task);
+
 }
 
-float ratio_worker_seats(int task, int num){
+float ratio_worker_seats(int task){
     
     int num_workerseats_per_task = 0;
     for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
@@ -192,6 +189,5 @@ float ratio_worker_seats(int task, int num){
         }
     }
 
-    if(num_workerseats_per_task != 0)return (float)num / num_workerseats_per_task;
-    return 0;
+    return (float)shared_tot_stats->num_worker_per_task[task] / num_workerseats_per_task;
 }
