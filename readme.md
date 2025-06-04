@@ -70,6 +70,7 @@ The project, developed as part of the university course in Operating Systems (ac
 - end simulation      (initialized 0)
 - stats               (initialized 1)
 - macros              (initialized 1)
+- timer               (initialized 1)
 - worker seats        (initialized 1) [as many as the number of the worker seats]
 
 ## Message queues
