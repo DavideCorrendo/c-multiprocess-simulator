@@ -137,10 +137,14 @@ void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int 
         
         seat_num = msg->num;
         msg->mtype = 1;
+        wait_semaphore(semid, timer);
         msg->num = shared_macros->timer;
+        signal_semaphore(semid, timer);
 
         wait_semaphore(semid, worker_seats + seat_num);
+        wait_semaphore(semid, timer);
         msg->num = shared_macros->timer - msg->num;
+        signal_semaphore(semid, timer);
         msgsnd(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 0);
         msgrcv_wait(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 2, semid);
         signal_semaphore(semid, worker_seats + seat_num);

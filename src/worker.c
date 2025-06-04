@@ -21,9 +21,17 @@ void cleanup_resources() {
     if (shared_macros && shmdt(shared_macros) == -1) perror("Failed to detach shared_macros");
 }
 
-void signal_handler(int signum) {
+void signal_handler(int sig) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL; 
+    
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL); 
+    
     cleanup_resources();
-    exit(signum);
+    raise(sig);  
 }
 
 int main(int argc, char *argv[]) {
@@ -42,6 +50,7 @@ int main(int argc, char *argv[]) {
     sa.sa_handler = signal_handler;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGHUP, &sa, NULL);
 
     srand((time(NULL)) + getpid());
     int task = rand() % 6;//take a random task for the worker until the day_ended of simulation
@@ -154,6 +163,7 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
 
 void update_stats(int day, int task, float task_time, bool pause, int wait_time){
     
+
     shared_daily_stats[day].daily_waiting_time += wait_time;
     shared_daily_stats[day].time_wait_daily_per_task[task] += wait_time;
 

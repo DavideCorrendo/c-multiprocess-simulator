@@ -105,15 +105,13 @@ int main() {
         wait_semaphore(semid, macros);
         shared_macros->processes_finished++;
         signal_semaphore(semid, macros);
-        puts("ticket finito");
 
     }
 
     reset_signals_to_default();
-    cleanup_resources(shared_macros, shared_seats);
+    cleanup_resources();
     sleep(10);
     return EXIT_SUCCESS;
-
 }
 
 int search_seat(int task, worker_seat *shared_seats, int semid, int seat_visits[]){//search the seat number to send to the user that has less users waiting

@@ -1,0 +1,573 @@
+Statistics generated on: 2025-06-04 10:24:47
+========================================
+
+
+-----------------------DAY 1-----------------------
+
+average number of users served per worker: 5.50
+average number of services done: 12.80
+average number of services not done: 0.50
+average waiting time: 1.40
+average service time: 9.49
+
+service 1 daily stats
+average waiting time: 0.29
+average service time: 10.02
+
+service 2 daily stats
+average waiting time: 1.83
+average service time: 7.83
+
+service 3 daily stats
+average waiting time: 0.43
+average service time: 6.06
+
+service 4 daily stats
+average waiting time: 0.00
+average service time: 8.34
+
+service 5 daily stats
+average waiting time: 13.56
+average service time: 21.73
+
+service 6 daily stats
+average waiting time: 0.00
+average service time: 20.10
+
+average number of pause daily: 0.35
+number of users active daily: 20
+ratio between workers and workerseats for workerseat[0]: 1.00
+ratio between workers and workerseats for workerseat[1]: 0.75
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 1.00
+ratio between workers and workerseats for workerseat[4]: 0.33
+ratio between workers and workerseats for workerseat[5]: 2.00
+
+
+-----------------------TOTAL STATS-----------------------
+
+number of user served: 110
+number of services done: 256
+number of services not done: 10
+average waiting time: 1.40
+average service time: 9.49
+
+service 0 total stats
+number of services done: 113
+number of user served: 75
+number of services not done: 6
+number of users served per worker: 18.75
+number of services done: 28.25
+number of services not done: 1.50
+average waiting time: 0.29
+average service time: 10.02
+
+service 1 total stats
+number of services done: 48
+number of user served: 43
+number of services not done: 1
+number of users served per worker: 14.33
+number of services done: 16.00
+number of services not done: 0.33
+average waiting time: 1.83
+average service time: 7.83
+
+service 2 total stats
+number of services done: 49
+number of user served: 42
+number of services not done: 0
+number of users served per worker: 14.00
+number of services done: 16.33
+number of services not done: 0.00
+average waiting time: 0.43
+average service time: 6.06
+
+service 3 total stats
+number of services done: 27
+number of user served: 26
+number of services not done: 2
+number of users served per worker: 8.67
+number of services done: 9.00
+number of services not done: 0.67
+average waiting time: 0.00
+average service time: 8.34
+
+service 4 total stats
+number of services done: 16
+number of user served: 15
+number of services not done: 1
+number of users served per worker: 15.00
+number of services done: 16.00
+number of services not done: 1.00
+average waiting time: 13.56
+average service time: 21.73
+
+service 5 total stats
+number of services done: 3
+number of user served: 3
+number of services not done: 0
+number of users served per worker: 0.50
+number of services done: 0.50
+number of services not done: 0.00
+average waiting time: 0.00
+average service time: 20.10
+
+number of users active for the simulation: 20
+number of pause during simulation: 7
+Statistics generated on: 2025-06-04 10:31:40
+========================================
+
+
+-----------------------DAY 1-----------------------
+
+average number of users served per worker: 0.59
+average number of services done: 0.82
+average number of services not done: 20.06
+average waiting time: 0.00
+average service time: 10.00
+
+service 1 daily stats
+average waiting time: 0.00
+average service time: 10.27
+
+service 2 daily stats
+
+service 3 daily stats
+average waiting time: 0.00
+average service time: 7.61
+
+service 4 daily stats
+
+service 5 daily stats
+
+service 6 daily stats
+
+average number of pause daily: 0.06
+number of users active daily: 17
+ratio between workers and workerseats for workerseat[0]: 0.25
+ratio between workers and workerseats for workerseat[1]: 1.25
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 1.67
+ratio between workers and workerseats for workerseat[4]: 1.33
+ratio between workers and workerseats for workerseat[5]: 0.67
+
+
+-----------------------DAY 2-----------------------
+
+average number of users served per worker: 9.83
+average number of services done: 16.25
+average number of services not done: 13.33
+average waiting time: 7.35
+average service time: 8.94
+
+service 1 daily stats
+average waiting time: 0.00
+average service time: 9.85
+
+service 2 daily stats
+average waiting time: 13.06
+average service time: 8.54
+
+service 3 daily stats
+average waiting time: 2.34
+average service time: 5.91
+
+service 4 daily stats
+average waiting time: 17.21
+average service time: 9.36
+
+service 5 daily stats
+average waiting time: 35.67
+average service time: 27.79
+
+service 6 daily stats
+average waiting time: 0.00
+average service time: 52.49
+
+average number of pause daily: 0.17
+number of users active daily: 12
+ratio between workers and workerseats for workerseat[0]: 0.11
+ratio between workers and workerseats for workerseat[1]: 1.25
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 2.50
+ratio between workers and workerseats for workerseat[4]: 4.00
+ratio between workers and workerseats for workerseat[5]: 2.00
+
+
+-----------------------TOTAL STATS-----------------------
+
+number of user served: 128
+number of services done: 209
+number of services not done: 501
+average waiting time: 6.86
+average service time: 9.01
+
+service 0 total stats
+number of services done: 74
+number of user served: 57
+number of services not done: 281
+number of users served per worker: 57.00
+number of services done: 74.00
+number of services not done: 281.00
+average waiting time: 0.00
+average service time: 9.92
+
+service 1 total stats
+number of services done: 62
+number of user served: 55
+number of services not done: 90
+number of users served per worker: 11.00
+number of services done: 12.40
+number of services not done: 18.00
+average waiting time: 13.06
+average service time: 8.54
+
+service 2 total stats
+number of services done: 45
+number of user served: 42
+number of services not done: 54
+number of users served per worker: 14.00
+number of services done: 15.00
+number of services not done: 18.00
+average waiting time: 2.29
+average service time: 5.95
+
+service 3 total stats
+number of services done: 24
+number of user served: 23
+number of services not done: 53
+number of users served per worker: 4.60
+number of services done: 4.80
+number of services not done: 10.60
+average waiting time: 17.21
+average service time: 9.36
+
+service 4 total stats
+number of services done: 3
+number of user served: 3
+number of services not done: 21
+number of users served per worker: 0.75
+number of services done: 0.75
+number of services not done: 5.25
+average waiting time: 35.67
+average service time: 27.79
+
+service 5 total stats
+number of services done: 1
+number of user served: 1
+number of services not done: 2
+number of users served per worker: 0.50
+number of services done: 0.50
+number of services not done: 1.00
+average waiting time: 0.00
+average service time: 52.49
+
+number of users active for the simulation: 29
+number of pause during simulation: 3
+Statistics generated on: 2025-06-04 10:38:48
+========================================
+
+
+-----------------------DAY 1-----------------------
+
+average number of users served per worker: 5.12
+average number of services done: 8.47
+average number of services not done: 10.53
+average waiting time: 18.27
+average service time: 10.03
+
+service 1 daily stats
+average waiting time: 71.67
+average service time: 10.91
+
+service 2 daily stats
+average waiting time: 0.00
+average service time: 7.82
+
+service 3 daily stats
+average waiting time: 0.00
+average service time: 5.84
+
+service 4 daily stats
+
+service 5 daily stats
+average waiting time: 14.00
+average service time: 22.33
+
+service 6 daily stats
+average waiting time: 0.00
+average service time: 20.19
+
+average number of pause daily: 0.18
+number of users active daily: 17
+ratio between workers and workerseats for workerseat[0]: 0.25
+ratio between workers and workerseats for workerseat[1]: 2.25
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 0.00
+ratio between workers and workerseats for workerseat[4]: 0.67
+ratio between workers and workerseats for workerseat[5]: 1.67
+
+
+-----------------------DAY 2-----------------------
+
+average number of users served per worker: 4.35
+average number of services done: 7.65
+average number of services not done: 8.15
+average waiting time: 34.24
+average service time: 9.53
+
+service 1 daily stats
+average waiting time: 106.41
+average service time: 10.29
+
+service 2 daily stats
+average waiting time: 0.00
+average service time: 8.30
+
+service 3 daily stats
+average waiting time: 0.00
+average service time: 5.88
+
+service 4 daily stats
+
+service 5 daily stats
+average waiting time: 0.00
+average service time: 22.24
+
+service 6 daily stats
+average waiting time: 8.33
+average service time: 16.46
+
+average number of pause daily: 0.05
+number of users active daily: 20
+ratio between workers and workerseats for workerseat[0]: 0.12
+ratio between workers and workerseats for workerseat[1]: 2.25
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 0.00
+ratio between workers and workerseats for workerseat[4]: 1.00
+ratio between workers and workerseats for workerseat[5]: 5.00
+
+
+-----------------------TOTAL STATS-----------------------
+
+number of user served: 174
+number of services done: 297
+number of services not done: 342
+average waiting time: 26.50
+average service time: 9.77
+
+service 0 total stats
+number of services done: 82
+number of user served: 63
+number of services not done: 239
+number of users served per worker: 63.00
+number of services done: 82.00
+number of services not done: 239.00
+average waiting time: 92.43
+average service time: 10.54
+
+service 1 total stats
+number of services done: 94
+number of user served: 77
+number of services not done: 16
+number of users served per worker: 8.56
+number of services done: 10.44
+number of services not done: 1.78
+average waiting time: 0.00
+average service time: 8.04
+
+service 2 total stats
+number of services done: 84
+number of user served: 71
+number of services not done: 13
+number of users served per worker: 23.67
+number of services done: 28.00
+number of services not done: 4.33
+average waiting time: 0.00
+average service time: 5.86
+
+service 3 total stats
+number of services done: 0
+number of user served: 0
+number of services not done: 63
+
+service 4 total stats
+number of services done: 32
+number of user served: 28
+number of services not done: 11
+number of users served per worker: 14.00
+number of services done: 16.00
+number of services not done: 5.50
+average waiting time: 8.31
+average service time: 22.29
+
+service 5 total stats
+number of services done: 5
+number of user served: 5
+number of services not done: 0
+number of users served per worker: 1.00
+number of services done: 1.00
+number of services not done: 0.00
+average waiting time: 5.00
+average service time: 17.95
+
+number of users active for the simulation: 37
+number of pause during simulation: 4
+Statistics generated on: 2025-06-04 10:39:11
+========================================
+
+
+-----------------------DAY 1-----------------------
+
+average number of users served per worker: 4.39
+average number of services done: 8.56
+average number of services not done: 8.11
+average waiting time: 41.02
+average service time: 9.19
+
+service 1 daily stats
+average waiting time: 128.65
+average service time: 10.26
+
+service 2 daily stats
+average waiting time: 0.00
+average service time: 8.65
+
+service 3 daily stats
+average waiting time: 0.04
+average service time: 5.54
+
+service 4 daily stats
+average waiting time: 0.00
+average service time: 8.22
+
+service 5 daily stats
+average waiting time: 2.00
+average service time: 22.19
+
+service 6 daily stats
+average waiting time: 0.00
+average service time: 25.33
+
+average number of pause daily: 0.22
+number of users active daily: 18
+ratio between workers and workerseats for workerseat[0]: 0.25
+ratio between workers and workerseats for workerseat[1]: 1.50
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 1.67
+ratio between workers and workerseats for workerseat[4]: 0.33
+ratio between workers and workerseats for workerseat[5]: 1.33
+
+
+-----------------------DAY 2-----------------------
+
+average number of users served per worker: 4.65
+average number of services done: 9.30
+average number of services not done: 5.60
+average waiting time: 20.50
+average service time: 8.98
+
+service 1 daily stats
+average waiting time: 68.74
+average service time: 10.22
+
+service 2 daily stats
+average waiting time: 0.16
+average service time: 7.95
+
+service 3 daily stats
+average waiting time: 0.00
+average service time: 5.83
+
+service 4 daily stats
+average waiting time: 0.00
+average service time: 7.17
+
+service 5 daily stats
+average waiting time: 8.55
+average service time: 23.21
+
+service 6 daily stats
+average waiting time: 0.00
+average service time: 16.77
+
+average number of pause daily: 0.20
+number of users active daily: 20
+ratio between workers and workerseats for workerseat[0]: 0.11
+ratio between workers and workerseats for workerseat[1]: 2.00
+ratio between workers and workerseats for workerseat[2]: 1.00
+ratio between workers and workerseats for workerseat[3]: 1.67
+ratio between workers and workerseats for workerseat[4]: 1.00
+ratio between workers and workerseats for workerseat[5]: 4.00
+
+
+-----------------------TOTAL STATS-----------------------
+
+number of user served: 172
+number of services done: 340
+number of services not done: 258
+average waiting time: 29.79
+average service time: 9.08
+
+service 0 total stats
+number of services done: 103
+number of user served: 79
+number of services not done: 195
+number of users served per worker: 79.00
+number of services done: 103.00
+number of services not done: 195.00
+average waiting time: 97.24
+average service time: 10.24
+
+service 1 total stats
+number of services done: 84
+number of user served: 68
+number of services not done: 18
+number of users served per worker: 11.33
+number of services done: 14.00
+number of services not done: 3.00
+average waiting time: 0.08
+average service time: 8.28
+
+service 2 total stats
+number of services done: 69
+number of user served: 59
+number of services not done: 33
+number of users served per worker: 19.67
+number of services done: 23.00
+number of services not done: 11.00
+average waiting time: 0.01
+average service time: 5.73
+
+service 3 total stats
+number of services done: 63
+number of user served: 55
+number of services not done: 7
+number of users served per worker: 11.00
+number of services done: 12.60
+number of services not done: 1.40
+average waiting time: 0.00
+average service time: 7.77
+
+service 4 total stats
+number of services done: 17
+number of user served: 16
+number of services not done: 4
+number of users served per worker: 16.00
+number of services done: 17.00
+number of services not done: 4.00
+average waiting time: 6.24
+average service time: 22.85
+
+service 5 total stats
+number of services done: 4
+number of user served: 4
+number of services not done: 1
+number of users served per worker: 1.00
+number of services done: 1.00
+number of services not done: 0.25
+average waiting time: 0.00
+average service time: 18.91
+
+number of users active for the simulation: 38
+number of pause during simulation: 8

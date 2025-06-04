@@ -33,6 +33,7 @@ enum sem{
     end_simulation,
     stats,
     macros,
+    timer,
     worker_seats
 };
 
