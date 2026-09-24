@@ -619,27 +619,3 @@ void initialize_semaphore(int semid){
     }
 }
 
-int leggi_parametro(const char *file_path, const char *parametro) {
-    FILE *file = fopen(file_path, "r");
-    if (file == NULL) {
-        perror("Errore nell'apertura del file");
-        exit(EXIT_FAILURE);
-    }
-
-    char line[30];
-    while (fgets(line, sizeof(line), file)) {
-        line[strcspn(line, "\n")] = 0;
-
-        char *key = strtok(line, "=");
-        char *value = strtok(NULL, "=");
-
-        if (key && value && strcmp(key, parametro) == 0) {
-            fclose(file);
-            return atoi(value);
-        }
-    }
-
-    fclose(file);
-    fprintf(stderr, "Parameter '%s' not found in %s\n", parametro, file_path);
-    exit(EXIT_FAILURE);
-}

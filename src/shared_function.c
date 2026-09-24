@@ -162,3 +162,55 @@ void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int sem
         usleep(500);
     }
 }
+
+bool exist(int i , bool tasks_done[], int tasks[]){
+    bool res = false;
+    for(int j = 0; j < i && !res; j++){
+        if(tasks[i] == tasks[j]){
+            if(tasks_done[j]) res = true;   
+        }
+    }
+    return res;
+}
+
+int random_weighted(int values[], int weights[], int size) {
+    int total_weight = 0;
+    for (int i = 0; i < size; i++) {
+        total_weight += weights[i];
+    }
+
+    int rand_num = rand() % total_weight;
+
+    for (int i = 0; i < size; i++) {
+        if (rand_num < weights[i]) {
+            return values[i];
+        }
+        rand_num -= weights[i];
+    }
+    return -1;
+}
+
+int leggi_parametro(const char *file_path, const char *parametro) {
+    FILE *file = fopen(file_path, "r");
+    if (file == NULL) {
+        perror("Errore nell'apertura del file");
+        exit(EXIT_FAILURE);
+    }
+
+    char line[30];
+    while (fgets(line, sizeof(line), file)) {
+        line[strcspn(line, "\n")] = 0;
+
+        char *key = strtok(line, "=");
+        char *value = strtok(NULL, "=");
+
+        if (key && value && strcmp(key, parametro) == 0) {
+            fclose(file);
+            return atoi(value);
+        }
+    }
+
+    fclose(file);
+    fprintf(stderr, "Parameter '%s' not found in %s\n", parametro, file_path);
+    exit(EXIT_FAILURE);
+}

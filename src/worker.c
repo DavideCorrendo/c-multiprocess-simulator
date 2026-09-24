@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 
 void working_time(int task, int seat_num, struct message *msg, int msgid, int semid, int pause_counter, int day) {
     bool pause = false;
-    int user_served = 0, wait_time = 0;
+    int wait_time = 0;
     float time_task_count = 0;
 
     while (get_semaphore_value(semid, end_day) == 0 && !pause && keep_running) {
@@ -120,7 +120,6 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
         msg->num = 1;
         msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
-        user_served++;
         time_task_count += time_task;
 
         if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {

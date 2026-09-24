@@ -134,5 +134,7 @@ int sem_operation(int semid, int sem_num, int op_value);
 void reset_signals_to_default();
 void wait_signal(int semid, int sem_num);
 void msgrcv_wait(int msgid, struct message *msg, size_t size, long type, int semid);
+int random_weighted(int values[], int weights[], int size);
+bool exist(int i, bool tasks_done[], int tasks[]);
 
 #endif

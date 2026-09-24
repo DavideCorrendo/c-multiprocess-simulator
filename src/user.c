@@ -156,23 +156,6 @@ void cleanup_resources() {
     }
 }
 
-int random_weighted(int values[], int weights[], int size) {
-    int total_weight = 0;
-    for (int i = 0; i < size; i++) {
-        total_weight += weights[i];
-    }
-
-    int rand_num = rand() % total_weight;
-
-    for (int i = 0; i < size; i++) {
-        if (rand_num < weights[i]) {
-            return values[i];
-        }
-        rand_num -= weights[i];
-    }
-    return -1;
-}
-
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done){
     if(remaining_task < num_task){
         shared_daily_stats[day].user_served_daily++;
@@ -199,12 +182,3 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     }
 }
 
-bool exist(int i , bool tasks_done[], int tasks[]){
-    bool res = false;
-    for(int j = 0; j < i && !res; j++){
-        if(tasks[i] == tasks[j]){
-            if(tasks_done[j]) res = true;   
-        }
-    }
-    return res;
-}
