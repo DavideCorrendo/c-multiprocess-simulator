@@ -31,8 +31,6 @@ void signal_handler(int sig) {
 }
 
 int main() {
-
-    //initialize signal mask
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
@@ -50,10 +48,11 @@ int main() {
         raise(SIGTERM);
     }
 
-
     FILE *file = fopen("conf/config_timeout.conf", "r");
-    fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
-    fclose(file);
+    if(file){
+        fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
+        fclose(file);
+    }
 
     struct message msg;
 
@@ -61,56 +60,58 @@ int main() {
 
     srand(time(NULL) + getpid());
 
-    //initialized variables for random_weighted
     int values[] = {0, 1, 2, 3, 4, 5};
     int weights[] = {50, 20, 15, 10, 4, 1};
     int size_r = sizeof(values) / sizeof(values[0]);
 
     int day;
     wait_semaphore(semid, macros);
-    int probability = (rand() % (shared_macros->P_SERV_MAX - shared_macros->P_SERV_MIN + 1)) + shared_macros->P_SERV_MIN;// probability to go to the post office
+    int probability = (rand() % (shared_macros->P_SERV_MAX - shared_macros->P_SERV_MIN + 1)) + shared_macros->P_SERV_MIN;
     signal_semaphore(semid, macros); 
 
-        while(get_semaphore_value(semid, end_simulation) == 0) {
+    while(get_semaphore_value(semid, end_simulation) == 0) {
+        wait_semaphore(semid, macros); 
+        int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
+        signal_semaphore(semid, macros); 
 
-            wait_semaphore(semid, macros); 
-            int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
-            signal_semaphore(semid, macros); 
+        int remaining_task = num_task;
+        int *tasks = malloc(num_task * sizeof(int));
+        bool *tasks_done = malloc(num_task * sizeof(bool));
 
-            int remaining_task = num_task;
-            int *tasks = malloc(num_task * sizeof(int));
-            bool *tasks_done = malloc(num_task * sizeof(bool));
-
-            for(int i = 0; i < num_task; i++){
-                tasks[i] = random_weighted(values, weights, size_r);
-                tasks_done[i] = false;
-            }
-
-            int rand_decision = rand() % 100;
-            
-            wait_signal(semid, start_day); //wait until director declares start of the day
-
-            wait_semaphore(semid, macros);
-            day = shared_macros->current_day;
-            signal_semaphore(semid, macros); 
-
-            if (rand_decision < probability){
-                int delay_units = rand() % 720;// Generate a random delay to decide when the user must go to the post office
-                usleep((delay_units * N_NANO_SECS) / 1000); // Convert to nanoseconds
-                office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
-            
-                wait_semaphore(semid, stats);
-                update_stats(num_task, remaining_task, day, tasks, tasks_done);
-                signal_semaphore(semid, stats);
-            }
-
-            wait_semaphore(semid, macros);
-            shared_macros->processes_finished++;
-            shared_macros->USER_FINISHED++;
-            signal_semaphore(semid, macros);
-
-            wait_signal(semid, end_day);//wait until director declares end of the day
+        for(int i = 0; i < num_task; i++){
+            tasks[i] = random_weighted(values, weights, size_r);
+            tasks_done[i] = false;
         }
+
+        int rand_decision = rand() % 100;
+        
+        wait_signal(semid, start_day); 
+
+        wait_semaphore(semid, macros);
+        day = shared_macros->current_day;
+        signal_semaphore(semid, macros); 
+
+        if (rand_decision < probability){
+            int delay_units = rand() % 720;
+            usleep((delay_units * N_NANO_SECS) / 1000); 
+            office_time(&msg, ticket_msgid, worker_msgids, tasks, semid, &remaining_task, num_task, tasks_done);
+        
+            wait_semaphore(semid, stats);
+            update_stats(num_task, remaining_task, day, tasks, tasks_done);
+            signal_semaphore(semid, stats);
+        }
+
+        wait_semaphore(semid, macros);
+        shared_macros->processes_finished++;
+        shared_macros->USER_FINISHED++;
+        signal_semaphore(semid, macros);
+
+        wait_signal(semid, end_day);
+
+        // Memory leak fix: deallocazione a fine ciclo
+        free(tasks);
+        free(tasks_done);
+    }
     
     reset_signals_to_default();
     cleanup_resources();
@@ -119,41 +120,36 @@ int main() {
 }
 
 void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]) {
-    
     int seat_num;
 
     for(int i = 0; i < num_task && get_semaphore_value(semid, 1) == 0; i++){
-
         msg->mtype = 1; 
-
         msg->num = tasks[i];
+        
         wait_semaphore(semid, 2);
         msgsnd(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 0);
         msgrcv_wait(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
         signal_semaphore(semid, 2);
+        
         if(msg->num == -2){
             continue;
         }
         
         seat_num = msg->num;
         msg->mtype = 1;
-        wait_semaphore(semid, timer);
         msg->num = shared_macros->timer;
-        signal_semaphore(semid, timer);
 
         wait_semaphore(semid, worker_seats + seat_num);
-        wait_semaphore(semid, timer);
         msg->num = shared_macros->timer - msg->num;
-        signal_semaphore(semid, timer);
         msgsnd(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 0);
         msgrcv_wait(worker_msgids[seat_num], msg, sizeof(struct message) - sizeof(long), 2, semid);
         signal_semaphore(semid, worker_seats + seat_num);
 
-        if(msg->num > -1){//
-        tasks_done[i] = true;
-        (*remaining_task)--;}
+        if(msg->num > -1){
+            tasks_done[i] = true;
+            (*remaining_task)--;
+        }
     }
-
 }
 
 void cleanup_resources() {
@@ -167,8 +163,7 @@ void cleanup_resources() {
     }
 }
 
-int random_weighted(int values[], int weights[], int size) {//function that extract randomly an element in values[] based on chances on weights[]
-
+int random_weighted(int values[], int weights[], int size) {
     int total_weight = 0;
     for (int i = 0; i < size; i++) {
         total_weight += weights[i];
@@ -182,12 +177,10 @@ int random_weighted(int values[], int weights[], int size) {//function that extr
         }
         rand_num -= weights[i];
     }
-
     return -1;
 }
 
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done){
-
     if(remaining_task < num_task){
         shared_daily_stats[day].user_served_daily++;
         shared_tot_stats->num_user_served++;
@@ -199,22 +192,21 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
     shared_tot_stats->num_task_done += (num_task - remaining_task);
     shared_tot_stats->num_task_not_done += remaining_task;
 
-    for(int i = 0; i < num_task; i++){//cicle for every task the user asked
-        if(tasks_done[i]){// if task has been done 
+    for(int i = 0; i < num_task; i++){
+        if(tasks_done[i]){
             shared_daily_stats[day].user_served_per_task[tasks[i]]++;
             shared_daily_stats[day].task_done_per_task[tasks[i]]++;
 
             if(!exist(i, tasks_done, tasks))shared_tot_stats->num_user_served_per_task[tasks[i]]++;
             shared_tot_stats->num_task_done_per_task[tasks[i]]++;
-        }else{// otherwise
+        }else{
             shared_daily_stats[day].task_not_done_per_task[tasks[i]]++;
             shared_tot_stats->num_task_not_done_per_task[tasks[i]]++;
         }
     }
-
 }
 
-bool exist(int i , bool tasks_done[], int tasks[]){//control if user asked for two or more of the same task, if the result is true, it doesn't modify the num_user_served_per_task stat 
+bool exist(int i , bool tasks_done[], int tasks[]){
     bool res = false;
     for(int j = 0; j < i && !res; j++){
         if(tasks[i] == tasks[j]){
@@ -223,4 +215,3 @@ bool exist(int i , bool tasks_done[], int tasks[]){//control if user asked for t
     }
     return res;
 }
-
