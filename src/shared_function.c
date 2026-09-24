@@ -190,10 +190,10 @@ int random_weighted(int values[], int weights[], int size) {
     return -1;
 }
 
-int leggi_parametro(const char *file_path, const char *parametro) {
+int read_parameter(const char *file_path, const char *parameter) {
     FILE *file = fopen(file_path, "r");
     if (file == NULL) {
-        perror("Errore nell'apertura del file");
+        perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
@@ -204,13 +204,13 @@ int leggi_parametro(const char *file_path, const char *parametro) {
         char *key = strtok(line, "=");
         char *value = strtok(NULL, "=");
 
-        if (key && value && strcmp(key, parametro) == 0) {
+        if (key && value && strcmp(key, parameter) == 0) {
             fclose(file);
             return atoi(value);
         }
     }
 
     fclose(file);
-    fprintf(stderr, "Parameter '%s' not found in %s\n", parametro, file_path);
+    fprintf(stderr, "Parameter '%s' not found in %s\n", parameter, file_path);
     exit(EXIT_FAILURE);
 }

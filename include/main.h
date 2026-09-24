@@ -54,7 +54,6 @@ typedef struct worker_seat{
 }worker_seat;
 
 typedef struct daily_stats{
-
     int user_served_daily;
     int task_done;
     int task_not_done;
@@ -71,11 +70,9 @@ typedef struct daily_stats{
 
     int num_workers_active_daily;
     float num_ratio_worker_user[NUM_TASKS];
-
 }daily_stats;
 
 typedef struct tot_stats{
-
     int wait_time;
     int task_time;
 
@@ -93,7 +90,6 @@ typedef struct tot_stats{
 
     int num_worker_active;
     int num_pause;
-
 }tot_stats;
 
 typedef struct shared_data{
@@ -123,7 +119,7 @@ extern union semun {
     unsigned short *array;
 } arg;
 
-int leggi_parametro(const char *, const char *);
+int read_parameter(const char *, const char *);
 int wait_semaphore(int semid, int sem_num);
 int signal_semaphore(int semid, int sem_num);
 int init_semaphore(int semid, int sem_num, int value);

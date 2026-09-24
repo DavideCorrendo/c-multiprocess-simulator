@@ -15,7 +15,7 @@ void print_file_stats();
 void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE,
 int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX);
 void initialize_semaphore(int semid);
-int leggi_parametro(const char *file_path, const char *parametro);
+int read_parameter(const char *file_path, const char *parameter);
 
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
@@ -95,11 +95,11 @@ int main() {
     puts("director process started");
     setup_signal_handlers();  
 
-    EXPLODE_THRESHOLD = leggi_parametro("conf/config_explode.conf", "EXPLODE_THRESHOLD");
+    EXPLODE_THRESHOLD = read_parameter("conf/config_explode.conf", "EXPLODE_THRESHOLD");
 
     int NOF_WORKERS, NOF_WORKERSEATS, NOF_USERS, NOF_PAUSE, N_REQUEST, P_SERVE_MIN, P_SERVE_MAX;
 
-    puts("extracting and initializating variables...");
+    puts("extracting and initializing variables...");
     load_config("conf/config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST, &P_SERVE_MIN, &P_SERVE_MAX);
     initialization_shm(SIM_DURATION, NOF_WORKERSEATS);
 
@@ -548,7 +548,7 @@ void wait_processes(){
 void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE, int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX) {
     FILE *file = fopen(filename, "r");
     if (!file) {
-        perror("Errore apertura file di configurazione");
+        perror("Error opening configuration file");
         exit(EXIT_FAILURE);
     }
 
@@ -586,6 +586,8 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
         }
         else if (strcmp(key, "NOF_USERS") == 0) {
             *NOF_USERS = atoi(value);
+        } else {
+            fprintf(stderr, "Unknown parameter: %s\n", key);
         }
     }
     
@@ -618,4 +620,3 @@ void initialize_semaphore(int semid){
         init_semaphore(semid, worker_seats + i, 1);
     }
 }
-

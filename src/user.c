@@ -13,9 +13,7 @@ int SIM_DURATION;
 
 void office_time(struct message *msg, int msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]);
 void cleanup_resources();
-int random_weighted(int values[], int weights[], int size);
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done);
-bool exist(int i , bool tasks_done[], int tasks[]);
 
 void signal_handler(int sig) {
     (void)sig;
@@ -181,4 +179,3 @@ void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *t
         }
     }
 }
-
