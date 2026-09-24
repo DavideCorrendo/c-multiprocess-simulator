@@ -10,16 +10,13 @@ int semop_retry(int semid, struct sembuf *sops, size_t nsops) {
     return ret;
 }
 
-// Performs a semaphore operation
 int sem_operation(int semid, int sem_num, int op_value) {
     struct sembuf sem_op;
     
-    // Configure the operation
-    sem_op.sem_num = sem_num;  // Specify which semaphore in the set
-    sem_op.sem_op = op_value;  // Operation value (-1 for wait, +1 for signal)
-    sem_op.sem_flg = 0;        // No special flags
+    sem_op.sem_num = sem_num;
+    sem_op.sem_op = op_value;
+    sem_op.sem_flg = 0;
 
-    // Perform the operation
     if (semop_retry(semid, &sem_op, 1) == -1) {
         perror("semop failed");
         raise(SIGTERM);
@@ -28,12 +25,10 @@ int sem_operation(int semid, int sem_num, int op_value) {
     return 0;
 }
 
-// Waits on a semaphore (decrements)
 int wait_semaphore(int semid, int sem_num) {
     return sem_operation(semid, sem_num, -1);
 }
 
-// Signals a semaphore (increments)
 int signal_semaphore(int semid, int sem_num) {
     return sem_operation(semid, sem_num, 1);
 }
@@ -44,7 +39,6 @@ void wait_signal(int semid, int sem_num){
     }
 }
 
-// Initializes a specific semaphore in the set
 int init_semaphore(int semid, int sem_num, int value) {
     arg.val = value;
     if (semctl(semid, sem_num, SETVAL, arg) == -1) {
@@ -54,7 +48,6 @@ int init_semaphore(int semid, int sem_num, int value) {
     return 0;
 }
 
-// Gets the value of a specific semaphore
 int get_semaphore_value(int semid, int sem_num) {
     int val = semctl(semid, sem_num, GETVAL);
     if (val == -1) {
@@ -63,20 +56,13 @@ int get_semaphore_value(int semid, int sem_num) {
     return val;
 }
 
-// Initializes shared memory keys
 void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **shared_daily_stats, tot_stats **shared_tot_stats, worker_seat **shared_seats, shared_data **shared_macros){    
-    key_t shm_daily_stat_key;
-    key_t shm_tot_stat_key;
-    key_t shm_seats_key;
-    key_t shm_macros_key;
-    key_t sem_key;
-    
-    shm_daily_stat_key = ftok("/tmp", 'A');
-    shm_tot_stat_key = ftok("/tmp", 'B');
-    shm_seats_key = ftok("/tmp", 'C');
-    shm_macros_key = ftok("/tmp", 'D');
-    sem_key = ftok("/tmp", 'E');
-    key_t ticket_key = ftok("/tmp", 'F');
+    key_t shm_daily_stat_key = ftok(FTOK_PATH, FTOK_DAILY_STATS);
+    key_t shm_tot_stat_key = ftok(FTOK_PATH, FTOK_TOT_STATS);
+    key_t shm_seats_key = ftok(FTOK_PATH, FTOK_SEATS);
+    key_t shm_macros_key = ftok(FTOK_PATH, FTOK_MACROS);
+    key_t sem_key = ftok(FTOK_PATH, FTOK_SEM);
+    key_t ticket_key = ftok(FTOK_PATH, FTOK_TICKET);
 
     int shmid_macros, shmid_daily_stats, shmid_tot_stats, shmid_seats;
 
@@ -92,7 +78,7 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
         raise(SIGTERM);
     }
     *shared_macros = shmat(shmid_macros, NULL, 0);
-    if (shared_macros == (void *)-1) {
+    if (*shared_macros == (void *)-1) {
         perror("shmat failed for macros in worker");
         raise(SIGTERM);
     }
@@ -103,7 +89,7 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
         raise(SIGTERM);
     }
     *shared_daily_stats = shmat(shmid_daily_stats, NULL, 0);
-    if (shared_daily_stats == (void *)-1) {
+    if (*shared_daily_stats == (void *)-1) {
         perror("shmat failed for stats in worker");
         raise(SIGTERM);
     }
@@ -125,7 +111,7 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
         raise(SIGTERM);
     }
     *shared_seats = shmat(shmid_seats, NULL, 0);
-    if (shared_seats == (void *)-1) {
+    if (*shared_seats == (void *)-1) {
         perror("shmat failed for seats in workerg");
         raise(SIGTERM);
     }
@@ -144,18 +130,16 @@ void initialize_IPC(int* msgid_ticket, int **msgid, int *semid, daily_stats **sh
 
     *msgid = malloc((*shared_macros)->NOF_WORKERSEATS * sizeof(int));
     for (int i = 0; i < (*shared_macros)->NOF_WORKERSEATS; i++){
-        key_t msgworker_key = ftok("/tmp", 'G' + i);
+        key_t msgworker_key = ftok(FTOK_PATH, FTOK_WORKER_BASE + i);
         (*msgid)[i] = msgget(msgworker_key, IPC_CREAT | 0666);
     }
-
 }
 
-// Initializes a modified set of keys (example placeholder)
 void initialize_keys_modified(key_t *shm_data_key, key_t *sem_key, key_t *msg_key, key_t *shm_seats_key) {
-    *shm_data_key = ftok("/tmp", 'D');
-    *sem_key = ftok("/tmp", 'E');
-    *msg_key = ftok("/tmp", 'F');
-    *shm_seats_key = ftok("/tmp", 'C');
+    *shm_data_key = ftok(FTOK_PATH, FTOK_MACROS);
+    *sem_key = ftok(FTOK_PATH, FTOK_SEM);
+    *msg_key = ftok(FTOK_PATH, FTOK_TICKET);
+    *shm_seats_key = ftok(FTOK_PATH, FTOK_SEATS);
 
     if (*shm_data_key == -1 || *sem_key == -1 || *msg_key == -1 || *shm_seats_key == -1) {
         perror("ftok failed");

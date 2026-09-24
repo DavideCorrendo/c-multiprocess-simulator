@@ -3,8 +3,18 @@
 
 #define _GNU_SOURCE
 
+#define NUM_TASKS 6
 #define TIMES_ARRAY {10, 8, 6, 8, 20, 20}
 #define N_NANO_SECS 10000000 //MUST BE A MULTIPLE OF 1000
+
+#define FTOK_PATH "/tmp"
+#define FTOK_DAILY_STATS 'A'
+#define FTOK_TOT_STATS 'B'
+#define FTOK_SEATS 'C'
+#define FTOK_MACROS 'D'
+#define FTOK_SEM 'E'
+#define FTOK_TICKET 'F'
+#define FTOK_WORKER_BASE 'G'
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +43,6 @@ enum sem{
     end_simulation,
     stats,
     macros,
-    timer,
     worker_seats
 };
 
@@ -46,41 +55,41 @@ typedef struct worker_seat{
 
 typedef struct daily_stats{
 
-    int user_served_daily;//
-    int task_done;//
-    int task_not_done;//
-    int daily_waiting_time;//
-    int time_task_daily;//
+    int user_served_daily;
+    int task_done;
+    int task_not_done;
+    int daily_waiting_time;
+    int time_task_daily;
 
-    int user_served_per_task[6];//
-    int task_done_per_task[6];//
-    int task_not_done_per_task[6];//
-    float time_task_daily_per_task[6];//
-    float time_wait_daily_per_task[6];//
+    int user_served_per_task[NUM_TASKS];
+    int task_done_per_task[NUM_TASKS];
+    int task_not_done_per_task[NUM_TASKS];
+    float time_task_daily_per_task[NUM_TASKS];
+    float time_wait_daily_per_task[NUM_TASKS];
 
     int num_pause_daily;
 
     int num_workers_active_daily;
-    float num_ratio_worker_user[6];
+    float num_ratio_worker_user[NUM_TASKS];
 
 }daily_stats;
 
 typedef struct tot_stats{
 
-    int wait_time;//
-    int task_time;//
+    int wait_time;
+    int task_time;
 
     int num_user_served;
     int num_task_done;
     int num_task_not_done;
 
-    int num_worker_per_task[6];
-    float wait_time_per_task[6];//
-    float task_time_per_task[6];//
+    int num_worker_per_task[NUM_TASKS];
+    float wait_time_per_task[NUM_TASKS];
+    float task_time_per_task[NUM_TASKS];
 
-    int num_user_served_per_task[6];
-    int num_task_done_per_task[6];
-    int num_task_not_done_per_task[6];
+    int num_user_served_per_task[NUM_TASKS];
+    int num_task_done_per_task[NUM_TASKS];
+    int num_task_not_done_per_task[NUM_TASKS];
 
     int num_worker_active;
     int num_pause;
@@ -113,7 +122,6 @@ extern union semun {
     struct semid_ds *buf;
     unsigned short *array;
 } arg;
-
 
 int leggi_parametro(const char *, const char *);
 int wait_semaphore(int semid, int sem_num);
