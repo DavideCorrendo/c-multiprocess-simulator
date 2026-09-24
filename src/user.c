@@ -1,5 +1,7 @@
 #include "../include/main.h"
 
+volatile sig_atomic_t keep_running = 1;
+
 static int ticket_msgid = -1;      
 static int *worker_msgids = NULL; 
 static int semid = -1;
@@ -10,24 +12,14 @@ static shared_data *shared_macros = NULL;
 int SIM_DURATION;
 
 void office_time(struct message *msg, int msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]);
-void task_time(struct message msg, int msgid, int semid, int worker_id, int seat_num, bool *end_day);
 void cleanup_resources();
 int random_weighted(int values[], int weights[], int size);
 void update_stats(int num_task, int remaining_task, int day, int *tasks, bool *tasks_done);
 bool exist(int i , bool tasks_done[], int tasks[]);
 
 void signal_handler(int sig) {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = SIG_DFL; 
-    
-    sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGHUP, &sa, NULL);
-    
-    cleanup_resources();
-    
-    raise(sig);
+    (void)sig;
+    keep_running = 0;
 }
 
 int main() {
@@ -69,12 +61,14 @@ int main() {
     int probability = (rand() % (shared_macros->P_SERV_MAX - shared_macros->P_SERV_MIN + 1)) + shared_macros->P_SERV_MIN;
     signal_semaphore(semid, macros); 
 
-    while(get_semaphore_value(semid, end_simulation) == 0) {
+    while(get_semaphore_value(semid, end_simulation) == 0 && keep_running) {
+
         wait_semaphore(semid, macros); 
         int num_task = (rand() % shared_macros->N_REQUESTS) + 1;
         signal_semaphore(semid, macros); 
 
         int remaining_task = num_task;
+        
         int *tasks = malloc(num_task * sizeof(int));
         bool *tasks_done = malloc(num_task * sizeof(bool));
 
@@ -106,23 +100,22 @@ int main() {
         shared_macros->USER_FINISHED++;
         signal_semaphore(semid, macros);
 
-        wait_signal(semid, end_day);
-
-        // Memory leak fix: deallocazione a fine ciclo
         free(tasks);
         free(tasks_done);
+
+        wait_signal(semid, end_day);
     }
     
     reset_signals_to_default();
     cleanup_resources();
-    sleep(10);
-    return 1;
+    sleep(1);
+    return EXIT_SUCCESS;
 }
 
 void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int tasks[], int semid, int *remaining_task, int num_task, bool tasks_done[]) {
     int seat_num;
 
-    for(int i = 0; i < num_task && get_semaphore_value(semid, 1) == 0; i++){
+    for(int i = 0; i < num_task && get_semaphore_value(semid, 1) == 0 && keep_running; i++){
         msg->mtype = 1; 
         msg->num = tasks[i];
         
@@ -131,7 +124,7 @@ void office_time(struct message *msg, int ticket_msgid, int* worker_msgids ,int 
         msgrcv_wait(ticket_msgid, msg, sizeof(struct message) - sizeof(long), 2, semid);
         signal_semaphore(semid, 2);
         
-        if(msg->num == -2){
+        if(msg->num == -2) {
             continue;
         }
         
@@ -210,7 +203,7 @@ bool exist(int i , bool tasks_done[], int tasks[]){
     bool res = false;
     for(int j = 0; j < i && !res; j++){
         if(tasks[i] == tasks[j]){
-            if(tasks_done[j])res = true;   
+            if(tasks_done[j]) res = true;   
         }
     }
     return res;

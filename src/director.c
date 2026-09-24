@@ -1,5 +1,7 @@
 #include "../include/main.h"
 
+volatile sig_atomic_t keep_running = 1;
+
 void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS);
 void handle_child_exit(int sig);
 void handle_termination(int sig);
@@ -14,7 +16,6 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
 int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX);
 void initialize_semaphore(int semid);
 int leggi_parametro(const char *file_path, const char *parametro);
-FILE *fp;
 
 static int shmid_daily_stats = -1;
 static int shmid_tot_stats = -1;
@@ -27,7 +28,7 @@ static daily_stats *shared_daily_stats = NULL;
 static tot_stats *shared_tot_stats = NULL;
 static worker_seat *shared_seats = NULL;
 static shared_data *shared_macros = NULL;
-static pid_t *child_pids;
+static pid_t *child_pids = NULL;
 static int num_children = 0;
 static int SIM_DURATION;
 static int EXPLODE_THRESHOLD;
@@ -79,32 +80,15 @@ void setup_signal_handlers() {
 }
 
 void handle_child_exit(int sig) {
-    int status;
-    pid_t pid;
+    (void)sig; 
     int saved_errno = errno;
-    
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        if (WIFEXITED(status)) {
-            printf("Process %d terminated with signal %d status %d\n", pid, sig, WEXITSTATUS(status));
-        } else if (WIFSIGNALED(status)) {
-            printf("Process %d killed by signal %d%s\n", pid, WTERMSIG(status), WCOREDUMP(status) ? " (core dumped)" : "");
-        }
-    }
-    
-    if (pid == -1 && errno != ECHILD) {
-        perror("waitpid failed");
-    }
-    
-    errno = saved_errno;
-    reset_signals_to_default();
-    cleanup();
-    exit(EXIT_FAILURE);
+    while (waitpid(-1, NULL, WNOHANG) > 0) {}
+    errno = saved_errno;  
 }
 
 void handle_termination(int sig) {
-    printf("Received termination signal %d. Cleaning up...\n", sig);
-    cleanup();
-    exit(EXIT_FAILURE);
+    (void)sig;
+    keep_running = 0; 
 }
 
 int main() {
@@ -113,15 +97,9 @@ int main() {
 
     EXPLODE_THRESHOLD = leggi_parametro("conf/config_explode.conf", "EXPLODE_THRESHOLD");
 
-    int NOF_WORKERS;
-    int NOF_WORKERSEATS;
-    int NOF_USERS;
-    int NOF_PAUSE;
-    int N_REQUEST;
-    int P_SERVE_MIN;
-    int P_SERVE_MAX;
+    int NOF_WORKERS, NOF_WORKERSEATS, NOF_USERS, NOF_PAUSE, N_REQUEST, P_SERVE_MIN, P_SERVE_MAX;
 
-    puts("extracting and initializating of all variables for the simulation...");
+    puts("extracting and initializating variables...");
     load_config("conf/config_timeout.conf", &NOF_WORKERS, &NOF_WORKERSEATS, &NOF_USERS, &NOF_PAUSE, &N_REQUEST, &P_SERVE_MIN, &P_SERVE_MAX);
     initialization_shm(SIM_DURATION, NOF_WORKERSEATS);
 
@@ -147,12 +125,11 @@ int main() {
     for(int i = 0; i < SIM_DURATION; i++) {
         memset(&shared_daily_stats[i], 0, sizeof(daily_stats));
     }
-
     memset(shared_tot_stats, 0, sizeof(tot_stats));
 
     initialize_semaphore(semid);
 
-    puts("forking child porcesses...");
+    puts("forking child processes...");
     pid_t pid = fork();
     if (pid == 0) {
         execv("bin/ticket_erogator", (char*[]){ "bin/ticket_erogator", NULL });
@@ -183,52 +160,42 @@ int main() {
         add_child_pid(pid);
     }
 
-    puts("simulaiton started");
-    for(; shared_macros->current_day < SIM_DURATION; shared_macros->current_day++){
-        puts("workerseats tasks assignment...");
+    puts("simulation started");
+    for(; shared_macros->current_day < SIM_DURATION && keep_running; shared_macros->current_day++){
         tasks_assignment();
         signal_semaphore(semid, start_day);
-        puts("day started");
+        
         simulate_day();
-        puts("day finished");
+        
         if((shared_macros->NOF_USERS - shared_macros->USER_FINISHED) >= EXPLODE_THRESHOLD){
             printf("Simulation terminated: Number of waiting users exceeded threshold\n");
             break;
         } 
         wait_semaphore(semid, start_day);
-        if(shared_macros->current_day == SIM_DURATION-1){signal_semaphore(semid, end_simulation);}
+        if(shared_macros->current_day == SIM_DURATION-1) { signal_semaphore(semid, end_simulation); }
+        
         signal_semaphore(semid, end_day);
         wait_processes();
         wait_semaphore(semid, end_day);
-        puts("wait_process finished");
+        
         print_stats(shared_macros->current_day);
         reset_ipc();  
-        puts("reset done");     
     }
-
-    puts("simulation completed. printing stats in file...");
 
     fp = fopen("stats.csv", "a");
-    if (fp == NULL) {
-        perror("Error opening stats.csv");
-        raise(SIGTERM);
+    if (fp != NULL) {
+        print_file_stats();
+        fclose(fp);
     }
 
-    print_file_stats();
-    fclose(fp);
-
-    puts("stats printed correctly. resetting signal and cleaning IPC resources...");
     reset_signals_to_default();
-    sleep(2);
+    sleep(1);
     cleanup();
-    puts("all ipc resources cleaned up");
-
     printf("Simulation completed successfully\n");
     return EXIT_SUCCESS;
 }
 
 void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
-    
     key_t shm_daily_stat_key = ftok(FTOK_PATH, FTOK_DAILY_STATS);
     key_t shm_tot_stat_key = ftok(FTOK_PATH, FTOK_TOT_STATS);
     key_t shm_seats_key = ftok(FTOK_PATH, FTOK_SEATS);
@@ -237,79 +204,27 @@ void initialization_shm(int SIM_DURATION, int NOF_WORKERSEATS){
     key_t ticket_msg_key = ftok(FTOK_PATH, FTOK_TICKET); 
 
     shmid_daily_stats = shmget(shm_daily_stat_key, SIM_DURATION * sizeof(daily_stats), IPC_CREAT | 0666);
-    if (shmid_daily_stats == -1) {
-        perror("shmget stats failed");
-        raise(SIGTERM);
-    }
-
     shmid_tot_stats = shmget(shm_tot_stat_key, sizeof(tot_stats), IPC_CREAT | 0666);
-    if (shmid_tot_stats == -1) {
-        perror("shmget stats failed");
-        raise(SIGTERM);
-    }
-
     shmid_seats = shmget(shm_seats_key, NOF_WORKERSEATS * sizeof(worker_seat), IPC_CREAT | 0666);
-    if (shmid_seats == -1) {
-        perror("shmget seats failed in director");
-        raise(SIGTERM);
-    }
-
     shmid_macros = shmget(shm_macros_key, sizeof(shared_data), IPC_CREAT | 0666);
-    if (shmid_macros == -1) {
-        perror("shmget macros failed");
-        raise(SIGTERM);
-    }
 
     shared_daily_stats = (daily_stats *)shmat(shmid_daily_stats, NULL, 0);
-    if (shared_daily_stats == (void *)-1) {
-        perror("shmat stats failed");
-        raise(SIGTERM);
-    }
-
     shared_tot_stats = (tot_stats*)shmat(shmid_tot_stats, NULL, 0);
-    if (shared_tot_stats == (void *)-1) {
-        perror("shmat stats failed");
-        raise(SIGTERM);
-    }
-
     shared_seats = (worker_seat *)shmat(shmid_seats, NULL, 0);
-    if (shared_seats == (void *)-1) {
-        perror("shmat seats failed");
-        raise(SIGTERM);
-    }
-
     shared_macros = (shared_data *) shmat(shmid_macros, NULL, 0);
-    if (shared_macros == (void *)-1) {
-        perror("shmat macros failed");
-        raise(SIGTERM);
-    }
 
     ticket_msgid = msgget(ticket_msg_key, IPC_CREAT | 0666);
-    if (ticket_msgid == -1) {
-        perror("msgget (ticket) failed");
-        raise(SIGTERM);
-    }
-
     worker_msgids = malloc(NOF_WORKERSEATS * sizeof(int));
     for (int i = 0; i < NOF_WORKERSEATS; i++) {
-        key_t worker_msg_key = ftok(FTOK_PATH, FTOK_WORKER_BASE + i);
+        key_t worker_msg_key = ftok(FTOK_PATH, FTOK_WORKER_BASE + i); 
         worker_msgids[i] = msgget(worker_msg_key, IPC_CREAT | 0666);
-        if (worker_msgids[i] == -1) {
-            perror("msgget (worker seat) failed");
-            cleanup(); 
-            exit(EXIT_FAILURE);
-        }
     }
 
     semid = semget(sem_key, NOF_WORKERSEATS + worker_seats, IPC_CREAT | 0666);
-    if(semid == -1) {
-        perror("semget");
-        exit(1);
-    }
 }
 
 void simulate_day() {
-    while(shared_macros->timer < 720){
+    while(shared_macros->timer < 720 && keep_running){
         usleep(N_NANO_SECS / 1000);
         shared_macros->timer++;
     }
@@ -377,11 +292,9 @@ void print_stats(int day){
     for(int i = 0; i < NUM_TASKS; i++){
         printf("ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
     }
-
 }
 
 void print_file_stats() {
-
     time_t current_time;
     struct tm *time_info;
     char time_string[100];
@@ -422,7 +335,6 @@ void print_file_stats() {
         for(int i = 0; i < NUM_TASKS; i++){
             fprintf(fp, "ratio between workers and workerseats for workerseat[%d]: %.2f\n", i, shared_daily_stats[day].num_ratio_worker_user[i]);
         }
-    
     }
     
     fprintf(fp, "\n\n-----------------------TOTAL STATS-----------------------\n\n");
@@ -544,15 +456,9 @@ void tasks_assignment() {
             }
         }
     }
-    
-    printf("Task distribution for day %d:\n", shared_macros->current_day);
-    for (int i = 0; i < NUM_TASKS; i++) {
-        printf("Task %d: %d seats (demand: %d)\n", i, seats_per_task[i], task_demand[i]);
-    }
 }
 
 int reset_ipc() {
-
     shared_macros->processes_finished = 0;
     shared_macros->USER_FINISHED = 0;
     struct message msg;
@@ -561,7 +467,6 @@ int reset_ipc() {
         ssize_t ret = msgrcv(ticket_msgid, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT);
         if (ret == -1) {
             if (errno == ENOMSG) break; 
-            perror("msgrcv (ticket) failed");
             break;
         }
     }
@@ -572,7 +477,6 @@ int reset_ipc() {
                 ssize_t ret = msgrcv(worker_msgids[i], &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT);
                 if (ret == -1) {
                     if (errno == ENOMSG) break; 
-                    perror("msgrcv (worker seat) failed");
                     break;
                 }
             }
@@ -580,13 +484,11 @@ int reset_ipc() {
     }
     
     shared_macros->timer = 0;
-
     return 0;
 }
 
 void cleanup(){
-
-if (child_pids != NULL) {
+    if (child_pids != NULL) {
         for (int i = 0; i < num_children; i++) {
             if (child_pids[i] > 0) {
                 kill(child_pids[i], SIGTERM);
@@ -637,15 +539,13 @@ if (child_pids != NULL) {
 }
 
 void wait_processes(){
-    while(1) {
+    while(keep_running) {
         if(shared_macros->processes_finished == shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1) break;
-        printf("waiting %d processes to end day\n",(shared_macros->NOF_WORKERS + shared_macros->NOF_USERS + 1) - shared_macros->processes_finished);
         sleep(1);
     }
 }
 
 void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, int* NOF_USERS, int* NOF_PAUSE, int* N_REQUEST, int* P_SERVE_MIN, int* P_SERVE_MAX) {
-
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Errore apertura file di configurazione");
@@ -687,9 +587,6 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
         else if (strcmp(key, "NOF_USERS") == 0) {
             *NOF_USERS = atoi(value);
         }
-        else {
-            fprintf(stderr, "Parametro sconosciuto: %s\n", key);
-        }
     }
     
     fclose(file);
@@ -708,7 +605,6 @@ void load_config(const char *filename, int* NOF_WORKERS, int* NOF_WORKERSEATS, i
         fprintf(stderr, "P_SERVE_MIN and P_SERVE_MAX must be <= 100\n");
         exit(EXIT_FAILURE);
     }
-
 }
 
 void initialize_semaphore(int semid){

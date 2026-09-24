@@ -1,5 +1,7 @@
 #include "../include/main.h"
 
+volatile sig_atomic_t keep_running = 1;
+
 bool find_seat(int task, int id_worker, int semid, int *seat_num);
 void working_time(int task, int id_worker, struct message *msg, int msgid, int semid, int pause_counter, int day);
 void update_stats(int day, int task, float task_time, bool pause, int wait_time);
@@ -21,17 +23,9 @@ void cleanup_resources() {
     if (shared_macros && shmdt(shared_macros) == -1) perror("Failed to detach shared_macros");
 }
 
-void signal_handler(int sig) {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = SIG_DFL; 
-    
-    sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGHUP, &sa, NULL); 
-    
-    cleanup_resources();
-    raise(sig);  
+void signal_handler(int signum) {
+    (void)signum;
+    keep_running = 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -44,20 +38,20 @@ int main(int argc, char *argv[]) {
     struct message msg;
     int id_worker = atoi(argv[1]);
 
-    //signal handling
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = signal_handler;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGHUP, &sa, NULL);
 
     srand((time(NULL)) + getpid());
-    int task = rand() % 6;//take a random task for the worker until the day_ended of simulation
+    int task = rand() % NUM_TASKS;
 
     FILE *file = fopen("conf/config_timeout.conf", "r");
-    fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
-    fclose(file);
+    if (file) {
+        fscanf(file, "SIM_DURATION=%d", &SIM_DURATION);
+        fclose(file);
+    }
 
     initialize_IPC(&ticket_msgid, &worker_msgids , &semid, &shared_daily_stats, &shared_tot_stats, &shared_seats, &shared_macros);
 
@@ -69,21 +63,22 @@ int main(int argc, char *argv[]) {
     shared_tot_stats->num_worker_per_task[task]++;
     signal_semaphore(semid, stats);
 
+    while(get_semaphore_value(semid, end_simulation) == 0 && keep_running){
 
-    while(get_semaphore_value(semid, end_simulation) == 0){
-
-        wait_signal(semid, start_day);//wait until director declares start of the day
+        wait_signal(semid, start_day);
         day_ended = false;
         int day = shared_macros->current_day;
         seat_num = -1;
 
-        while (!find_seat(task, id_worker, semid, &seat_num) && day_ended == false) {
+        while (!find_seat(task, id_worker, semid, &seat_num) && day_ended == false && keep_running) {
             day_ended = get_semaphore_value(semid, end_day);
             if(day_ended){break;}
             sleep(1);
         }
         
-        if(day_ended == false)working_time(task, seat_num, &msg, worker_msgids[seat_num], semid, pause_counter, day);
+        if(day_ended == false && keep_running) {
+            working_time(task, seat_num, &msg, worker_msgids[seat_num], semid, pause_counter, day);
+        }
 
         wait_semaphore(semid, macros);
         shared_macros->processes_finished++;
@@ -96,7 +91,7 @@ int main(int argc, char *argv[]) {
             signal_semaphore(semid, seat_num + worker_seats);
         }
 
-        wait_signal(semid, end_day);//wait until director declares end of the day
+        wait_signal(semid, end_day);
         
         msg.num = -1;
         seat_num = -1;
@@ -104,32 +99,31 @@ int main(int argc, char *argv[]) {
 
     reset_signals_to_default();
     cleanup_resources();
-    sleep(10);
+    sleep(1);
     exit(EXIT_SUCCESS);
 }
 
 void working_time(int task, int seat_num, struct message *msg, int msgid, int semid, int pause_counter, int day) {
-
     bool pause = false;
     int user_served = 0, wait_time = 0;
     float time_task_count = 0;
 
-    while (get_semaphore_value(semid, end_day) == 0 && !pause) {
-        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);//wait until a user send a message or day finish
-        if(msg->num == -1)break;//if day finished
+    while (get_semaphore_value(semid, end_day) == 0 && !pause && keep_running) {
+        msgrcv_wait(msgid, msg, sizeof(struct message) - sizeof(long), 1, semid);
+        if(msg->num == -1) break;
         wait_time += msg->num;
         float time_task = msg->time;
         
-        usleep((time_task * N_NANO_SECS) / 1000);//simulates working
+        usleep((time_task * N_NANO_SECS) / 1000);
 
         msg->mtype = 2;
         msg->num = 1;
-        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);//send message to user when finished
+        msgsnd(msgid, msg, sizeof(struct message) - sizeof(long), 0);
 
         user_served++;
         time_task_count += time_task;
 
-        if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {//1% chance of doing pause after task done 
+        if (((rand() % 100) <= 1) && pause_counter < shared_macros->NOF_PAUSE) {
             pause_counter++;
             pause = true;
             wait_semaphore(semid, worker_seats + seat_num);
@@ -137,7 +131,6 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
             shared_seats[seat_num].worker_id = -1;
             signal_semaphore(semid, worker_seats + seat_num);
         }
-
     }
 
     wait_semaphore(semid, stats);
@@ -147,7 +140,6 @@ void working_time(int task, int seat_num, struct message *msg, int msgid, int se
 
 bool find_seat(int task, int id_worker, int semid, int *seat_num) {
     bool res = false;
-    //cicle for every seat, if seat[i] has same task of worker and in not busy, worker takes it, otherwise it moves to the next seat
     for (int i = 0; i < shared_macros->NOF_WORKERSEATS && !res; i++) {
         wait_semaphore(semid, i + worker_seats);
         if (shared_seats[i].task == task && !shared_seats[i].busy) {
@@ -162,16 +154,12 @@ bool find_seat(int task, int id_worker, int semid, int *seat_num) {
 }
 
 void update_stats(int day, int task, float task_time, bool pause, int wait_time){
-    
-
     shared_daily_stats[day].daily_waiting_time += wait_time;
     shared_daily_stats[day].time_wait_daily_per_task[task] += wait_time;
 
-    //WAIT TIME
     shared_tot_stats->wait_time += wait_time;
     shared_tot_stats->wait_time_per_task[task] += wait_time;
 
-    //TIME TASK
     shared_daily_stats[day].time_task_daily += task_time;
     shared_daily_stats[day].time_task_daily_per_task[task] += task_time;
 
@@ -185,19 +173,16 @@ void update_stats(int day, int task, float task_time, bool pause, int wait_time)
 
     shared_daily_stats[day].num_workers_active_daily++;
     shared_tot_stats->num_worker_active++;
-
     shared_daily_stats[day].num_ratio_worker_user[task] = ratio_worker_seats(task);
-
 }
 
 float ratio_worker_seats(int task){
-    
     int num_workerseats_per_task = 0;
     for(int i = 0; i < shared_macros->NOF_WORKERSEATS; i++){
         if(shared_seats[i].task == task){
             num_workerseats_per_task++;
         }
     }
-
+    if (num_workerseats_per_task == 0) return 0;
     return (float)shared_tot_stats->num_worker_per_task[task] / num_workerseats_per_task;
 }
